@@ -68,7 +68,7 @@
                     <span class="badge {{mentor_badge.cls}}">{{mentor_badge.label}}</span>
                   </td>
                   <td data-l="Tasdiqlash" class="actions">
-                    <form class="am-inline-form" method="post" action="/amaliyot/mentor/kundalik/{{id}}/holat" data-once>
+                    <form class="am-inline-form" method="post" action="/amaliyot/mentor/kundalik/{{id}}/holat">
                       {{> csrf}}
                       <input class="am-compact-input am-w-md" type="text" name="fikr" value="{{mentor_fikr}}" placeholder="Qo'shimcha fikr (ixtiyoriy)">
                       <button class="btn-sm btn-green" type="submit" name="holat" value="tasdiqlandi">Tasdiqlash</button>
@@ -92,7 +92,7 @@
           <dt>Ko'nikmalar</dt><dd>{{#if ozlashtirilgan_konikmalar}}{{ozlashtirilgan_konikmalar}}{{else}}—{{/if}}</dd>
           <dt>Yakuniy xulosa</dt><dd>{{#if yakuniy_xulosa}}{{yakuniy_xulosa}}{{else}}—{{/if}}</dd>
         </dl>
-        <form class="am-inline-form mt" method="post" action="/amaliyot/mentor/xulosa/{{xulosa_id}}/holat" data-once>
+        <form class="am-inline-form mt" method="post" action="/amaliyot/mentor/xulosa/{{xulosa_id}}/holat">
           {{> csrf}}
           <input class="am-w-md" type="text" name="fikr" value="{{xulosa_mentor_fikr}}" placeholder="Xulosa bo'yicha qo'shimcha fikr (ixtiyoriy)">
           <button class="btn-sm btn-green" type="submit" name="holat" value="tasdiqlandi">Xulosani tasdiqlash</button>
@@ -102,3 +102,5 @@
     </div>
   {{/each}}
 {{/unless}}
+
+<script src="/p/amaliyot/app.js"></script>

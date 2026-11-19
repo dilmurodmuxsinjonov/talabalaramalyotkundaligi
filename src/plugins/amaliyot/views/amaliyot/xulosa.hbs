@@ -32,7 +32,7 @@
   {{/if}}
 </div>
 
-<form class="card" method="post" action="/amaliyot/xulosa" data-once>
+<form class="card" method="post" action="/amaliyot/xulosa">
   {{> csrf}}
   <input type="hidden" name="biriktirish_id" value="{{biriktirish.id}}">
 
@@ -71,3 +71,5 @@
     <button class="btn btn-primary" type="submit" name="harakat" value="topshirish">Tasdiqlash uchun topshirish</button>
   </div>
 </form>
+
+<script src="/p/amaliyot/app.js"></script>

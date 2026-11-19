@@ -207,7 +207,7 @@
               </td>
               <td data-l="Boshqarish" class="actions">
                 {{#if is_pending}}
-                  <form class="am-inline-form" method="post" action="/amaliyot/mentor/{{id}}/tasdiqlash" data-once>
+                  <form class="am-inline-form" method="post" action="/amaliyot/mentor/{{id}}/tasdiqlash">
                     {{> csrf}}
                     {{#unless korxona_id}}
                       <select class="am-compact-input am-w-md" name="korxona_id" title="Mavjud korxonaga bog'lash (ixtiyoriy)">
@@ -226,9 +226,10 @@
                     <button class="btn-sm btn-red" type="submit" name="action" value="rad_etish" data-confirm="Mentorni rad etasizmi?">Rad etish</button>
                   </form>
                 {{else if is_active}}
-                  <form class="am-inline-form" method="post" action="/amaliyot/mentor/{{id}}/tasdiqlash" data-once>
+                  <form class="am-inline-form" method="post" action="/amaliyot/mentor/{{id}}/tasdiqlash" data-confirm="Mentor akkauntini hoziroq muzlatasizmi?">
                     {{> csrf}}
-                    <button class="btn-sm btn-red" type="submit" name="action" value="muzlatish" data-confirm="Mentor akkauntini hoziroq muzlatasizmi?">Muzlatish</button>
+                    <input type="hidden" name="action" value="muzlatish">
+                    <button class="btn-sm btn-red" type="submit">Muzlatish</button>
                   </form>
                 {{else}}
                   <span class="muted">Yakunlangan</span>
