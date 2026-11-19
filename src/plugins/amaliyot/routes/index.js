@@ -1,6 +1,7 @@
 // Amaliyot kundaligi (amaliyot) marshrutlari: talaba, ustoz, dekanat/admin va korxona mentori
 const express = require('express');
 const { z } = require('zod');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const { ah, flash, idParam, AppError, forbidden } = require('../../../lib/http');
 const { requireRole } = require('../../../middleware/rbac');
 const { today, isYmd, fmtDate } = require('../../../lib/time');
@@ -59,12 +60,26 @@ function fmtTimestamp(ts) {
   }).format(d);
 }
 
+function remainingTimeText(ts) {
+  if (!ts) return '—';
+  const diffMs = new Date(ts).getTime() - Date.now();
+  if (Number.isNaN(diffMs) || diffMs <= 0) return 'Muddati tugagan';
+  const totalMin = Math.floor(diffMs / 60_000);
+  const days = Math.floor(totalMin / (60 * 24));
+  const hours = Math.floor((totalMin % (60 * 24)) / 60);
+  const mins = totalMin % 60;
+  if (days > 0) return `${days} kun ${hours} soat`;
+  if (hours > 0) return `${hours} soat ${mins} daq`;
+  return `${Math.max(1, mins)} daqiqa`;
+}
+
 function decorateKundalik(k) {
   return {
     ...k,
     sana_fmt: fmtDate(k.sana),
     ustoz_badge: badgeMeta(k.ustoz_holat),
     mentor_badge: badgeMeta(k.mentor_holat),
+    can_delete: k.ustoz_holat !== 'tasdiqlandi' && k.mentor_holat !== 'tasdiqlandi',
   };
 }
 
@@ -73,9 +88,43 @@ function decorateMentor(m) {
     ...m,
     holat_badge: badgeMeta(m.holat),
     amal_qilish_fmt: fmtTimestamp(m.amal_qilish_gacha),
+    qolgan_vaqt: m.holat === 'tasdiqlandi' ? remainingTimeText(m.amal_qilish_gacha) : '—',
     is_pending: m.holat === 'kutilmoqda',
     is_active: m.holat === 'tasdiqlandi',
   };
+}
+
+function computeDiaryStats(kundaliklar) {
+  let jamiSoat = 0;
+  let ustozTasdiq = 0;
+  let mentorTasdiq = 0;
+  for (const k of kundaliklar) {
+    jamiSoat += Number(k.soat || 0);
+    if (k.ustoz_holat === 'tasdiqlandi') ustozTasdiq += 1;
+    if (k.mentor_holat === 'tasdiqlandi') mentorTasdiq += 1;
+  }
+  return {
+    jamiKun: kundaliklar.length,
+    jamiSoat,
+    ustozTasdiq,
+    mentorTasdiq,
+  };
+}
+
+function parseBolimlarMatn(matn) {
+  return String(matn || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, i) => {
+      const [title, hint] = line.split('|').map((s) => s.trim());
+      return { key: `bolim_${i + 1}`, title: title || `Bo'lim ${i + 1}`, hint: hint || '' };
+    });
+}
+
+function formatBolimlarMatn(bolimlarJson) {
+  if (!Array.isArray(bolimlarJson)) return '';
+  return bolimlarJson.map((b) => (b.hint ? `${b.title} | ${b.hint}` : b.title)).join('\n');
 }
 
 function buildBolimRows(bolimlarJson, javoblar = {}) {
@@ -149,6 +198,22 @@ const turSchema = z.object({
   bolimlar_matn: z.string().trim().max(3000).optional().default(''),
 });
 
+const mentorAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 25,
+  skipSuccessfulRequests: true,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => `${ipKeyGenerator(req.ip)}|${String(req.body?.email || '').trim().toLowerCase()}`,
+  handler: (req, res) => res.status(429).render('amaliyot/mentor-kirish', {
+    layout: 'bare',
+    title: 'Mentor kirishi',
+    googleConfigured: isGoogleOAuthConfigured(),
+    email: req.body?.email,
+    error: 'Juda ko\'p urinish. 15 daqiqadan keyin qayta urinib ko\'ring.',
+  }),
+});
+
 // =====================================================================
 // 1. Ochiq va Mentor marshrutlari (publicRouter — requireLogin dan oldin)
 // =====================================================================
@@ -165,7 +230,7 @@ publicRouter.get('/amaliyot/mentor/kirish', (req, res) => {
   });
 });
 
-publicRouter.post('/amaliyot/mentor/kirish', ah(async (req, res) => {
+publicRouter.post('/amaliyot/mentor/kirish', mentorAuthLimiter, ah(async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   if (!email) {
     return res.status(400).render('amaliyot/mentor-kirish', {
@@ -320,6 +385,16 @@ publicRouter.get('/amaliyot/mentor', requireMentor, ah(async (req, res) => {
   });
 }));
 
+publicRouter.post('/amaliyot/mentor/biriktirish/:id/tasdiqlash-hammasi', requireMentor, ah(async (req, res) => {
+  const id = idParam(req.params.id);
+  const { fikr } = parseZod(z.object({
+    fikr: z.string().trim().max(2000).optional().default(''),
+  }), req.body);
+  const count = await svc.approveAllKundalikByMentor(id, req.mentor, fikr, req);
+  flash(req, 'ok', `${count} ta kunlik yozuv mentor tomonidan tasdiqlandi`);
+  res.redirect('/amaliyot/mentor');
+}));
+
 publicRouter.post('/amaliyot/mentor/kundalik/:id/holat', requireMentor, ah(async (req, res) => {
   const id = idParam(req.params.id);
   const { holat, fikr } = parseZod(z.object({
@@ -371,22 +446,28 @@ router.get('/amaliyot', ah(async (req, res) => {
     throw forbidden('Amaliyot kundaligi bo\'limiga ruxsat yo\'q');
   }
 
-  const { biriktirishlar, active, kundaliklar, xulosa } = await svc.getStudentDashboard(req.user.id);
+  const selectedId = req.query.b ? idParam(req.query.b) : null;
+  const { biriktirishlar, active, kundaliklar, xulosa, notifications } = await svc.getStudentDashboard(req.user.id, selectedId, req);
   res.render('amaliyot/talaba', {
     title: 'Amaliyot kundaligi',
+    hasMultiple: biriktirishlar.length > 1,
     biriktirishlar: biriktirishlar.map((b) => ({
       ...b,
       boshlanish_fmt: fmtDate(b.boshlanish_sana),
       tugash_fmt: fmtDate(b.tugash_sana),
       holat_badge: badgeMeta(b.holat),
+      is_selected: active && b.id === active.id,
     })),
     active: active ? {
       ...active,
       boshlanish_fmt: fmtDate(active.boshlanish_sana),
       tugash_fmt: fmtDate(active.tugash_sana),
+      holat_badge: badgeMeta(active.holat),
       bolimlar: buildBolimRows(active.bolimlar_json, xulosa?.bolimlar_javobi),
     } : null,
+    stats: computeDiaryStats(kundaliklar),
     kundaliklar: kundaliklar.map(decorateKundalik),
+    notifications: notifications.map((n) => ({ ...n, vaqt_fmt: fmtTimestamp(n.created_at) })),
     xulosa: xulosa ? {
       ...xulosa,
       talaba_badge: badgeMeta(xulosa.talaba_holat),
@@ -407,11 +488,19 @@ router.post('/amaliyot/kundalik', requireRole('student'), ah(async (req, res) =>
     natija: d.natija,
   }, req.user.id, req);
   flash(req, 'ok', `${fmtDate(d.sana)} uchun kundalik yozuvi saqlandi`);
-  res.redirect('/amaliyot');
+  res.redirect(`/amaliyot?b=${d.biriktirish_id}`);
+}));
+
+router.post('/amaliyot/kundalik/:id/ochirish', requireRole('student'), ah(async (req, res) => {
+  const id = idParam(req.params.id);
+  const biriktirishId = await svc.deleteKundalik(id, req.user.id, req);
+  flash(req, 'ok', 'Kundalik yozuvi o\'chirildi');
+  res.redirect(`/amaliyot?b=${biriktirishId}`);
 }));
 
 router.get('/amaliyot/xulosa', requireRole('student'), ah(async (req, res) => {
-  const { active, xulosa } = await svc.getStudentDashboard(req.user.id);
+  const selectedId = req.query.b ? idParam(req.query.b) : null;
+  const { active, xulosa } = await svc.getStudentDashboard(req.user.id, selectedId, req);
   if (!active) {
     flash(req, 'err', 'Siz hali amaliyotga biriktirilmagansiz');
     return res.redirect('/amaliyot');
@@ -505,6 +594,7 @@ router.get('/amaliyot/ustoz', requireRole('teacher', 'dekanat', 'admin'), ah(asy
     talabalar: data.talabalar,
     korxonalar: data.korxonalar,
     turlar: data.turlar,
+    notifications: data.notifications.map((n) => ({ ...n, vaqt_fmt: fmtTimestamp(n.created_at) })),
     bugun: today(),
   });
 }));
@@ -524,7 +614,9 @@ router.get('/amaliyot/ustoz/talaba/:id', requireRole('teacher', 'dekanat', 'admi
       ...full.biriktirish,
       boshlanish_fmt: fmtDate(full.biriktirish.boshlanish_sana),
       tugash_fmt: fmtDate(full.biriktirish.tugash_sana),
+      holat_badge: badgeMeta(full.biriktirish.holat),
     },
+    stats: computeDiaryStats(full.kundaliklar),
     bolimlar: buildBolimRows(full.biriktirish.bolimlar_json, full.xulosa?.bolimlar_javobi),
     kundaliklar: full.kundaliklar.map(decorateKundalik),
     xulosa: full.xulosa ? {
@@ -534,6 +626,7 @@ router.get('/amaliyot/ustoz/talaba/:id', requireRole('teacher', 'dekanat', 'admi
       mentor_badge: badgeMeta(full.xulosa.mentor_holat),
     } : null,
     turlar,
+    korxonalar: dash.korxonalar,
     activeMentors: dash.activeMentors,
   });
 }));
@@ -571,6 +664,26 @@ router.post('/amaliyot/biriktirish/:id/tur', requireRole('teacher', 'dekanat', '
   const { tur_id } = parseZod(z.object({ tur_id: z.coerce.number().int().positive() }), req.body);
   const tur = await svc.changeDiaryType(id, tur_id, req.user, req);
   flash(req, 'ok', `Kundalik turi "${tur.nomi}" ga o'zgartirildi`);
+  res.redirect(`/amaliyot/ustoz/talaba/${id}`);
+}));
+
+router.post('/amaliyot/biriktirish/:id/tahrirlash', requireRole('teacher', 'dekanat', 'admin'), ah(async (req, res) => {
+  const id = idParam(req.params.id);
+  const d = parseZod(z.object({
+    korxona_id: z.coerce.number().int().positive(),
+    boshlanish_sana: z.string().refine(isYmd, 'Boshlanish sanasi noto\'g\'ri'),
+    tugash_sana: z.string().refine(isYmd, 'Tugash sanasi noto\'g\'ri'),
+    mavzu: z.string().trim().max(300).optional().default(''),
+    holat: z.enum(['faol', 'yakunlangan', 'bekor_qilingan']),
+  }), req.body);
+  await svc.updateBiriktirish(id, {
+    korxonaId: d.korxona_id,
+    boshlanishSana: d.boshlanish_sana,
+    tugashSana: d.tugash_sana,
+    mavzu: d.mavzu,
+    holat: d.holat,
+  }, req.user, req);
+  flash(req, 'ok', 'Amaliyot biriktirishi ma\'lumotlari yangilandi');
   res.redirect(`/amaliyot/ustoz/talaba/${id}`);
 }));
 
@@ -623,13 +736,17 @@ router.post('/amaliyot/mentor/:id/tasdiqlash', requireRole('teacher', 'dekanat',
   const id = idParam(req.params.id);
   const d = parseZod(z.object({
     action: z.enum(['tasdiqlash', 'rad_etish', 'muzlatish']),
-    muddat_kun: z.union([z.literal(''), z.coerce.number().int().min(1).max(365)]).optional(),
+    muddat_kun: z.union([z.literal(''), z.coerce.number().int().min(1).max(720)]).optional(),
+    muddat_birlik: z.enum(['kun', 'soat']).optional().default('kun'),
+    korxona_id: z.union([z.literal(''), z.coerce.number().int().positive()]).optional(),
     rad_sababi: z.string().trim().max(500).optional().default(''),
   }), req.body);
   await svc.reviewMentorByUstoz({
     mentorId: id,
     action: d.action,
     muddatKun: d.muddat_kun,
+    muddatBirlik: d.muddat_birlik,
+    korxonaId: d.korxona_id || null,
     radSababi: d.rad_sababi,
   }, req.user, req);
   flash(req, 'ok', 'Mentor holati yangilandi');
@@ -645,29 +762,39 @@ router.get('/admin/amaliyot/turlar', requireRole('admin', 'dekanat', 'teacher'),
       ...t,
       bolimlar_count: Array.isArray(t.bolimlar_json) ? t.bolimlar_json.length : 0,
       bolimlar_list: Array.isArray(t.bolimlar_json) ? t.bolimlar_json : [],
+      bolimlar_matn: formatBolimlarMatn(t.bolimlar_json),
     })),
   });
 }));
 
 router.post('/admin/amaliyot/turlar', requireRole('admin', 'dekanat', 'teacher'), ah(async (req, res) => {
   const d = parseZod(turSchema, req.body);
-  const bolimlar = d.bolimlar_matn
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line, i) => {
-      const [title, hint] = line.split('|').map((s) => s.trim());
-      return { key: `bolim_${i + 1}`, title: title || `Bo'lim ${i + 1}`, hint: hint || '' };
-    });
-
   await svc.createTur({
     kod: d.kod,
     nomi: d.nomi,
     tavsif: d.tavsif,
     kunlikMinSoat: d.kunlik_min_soat,
-    bolimlar,
+    bolimlar: parseBolimlarMatn(d.bolimlar_matn),
   }, req.user, req);
   flash(req, 'ok', `"${d.nomi}" kundalik turi qo'shildi`);
+  res.redirect('/admin/amaliyot/turlar');
+}));
+
+router.post('/admin/amaliyot/turlar/:id', requireRole('admin', 'dekanat', 'teacher'), ah(async (req, res) => {
+  const id = idParam(req.params.id);
+  const d = parseZod(z.object({
+    nomi: z.string().trim().min(3, 'Nomi kamida 3 belgi').max(150),
+    tavsif: z.string().trim().max(1000).optional().default(''),
+    kunlik_min_soat: z.coerce.number().min(1).max(24).default(6),
+    bolimlar_matn: z.string().trim().max(3000).optional().default(''),
+  }), req.body);
+  await svc.updateTur(id, {
+    nomi: d.nomi,
+    tavsif: d.tavsif,
+    kunlikMinSoat: d.kunlik_min_soat,
+    bolimlar: parseBolimlarMatn(d.bolimlar_matn),
+  }, req.user, req);
+  flash(req, 'ok', `"${d.nomi}" kundalik turi yangilandi`);
   res.redirect('/admin/amaliyot/turlar');
 }));
 

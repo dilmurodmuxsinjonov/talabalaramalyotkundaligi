@@ -44,6 +44,35 @@
                 </form>
               </td>
             </tr>
+            <tr>
+              <td colspan="4" data-l="Tahrirlash">
+                <details>
+                  <summary>Tur va standart bo'limlarni tahrirlash</summary>
+                  <form class="mt" method="post" action="/admin/amaliyot/turlar/{{id}}" data-once>
+                    {{> csrf}}
+                    <div class="row">
+                      <div class="field">
+                        <label>Tur nomi</label>
+                        <input type="text" name="nomi" value="{{nomi}}" required>
+                      </div>
+                      <div class="field">
+                        <label>Min soat</label>
+                        <input type="number" name="kunlik_min_soat" step="0.5" min="1" max="24" value="{{kunlik_min_soat}}" required>
+                      </div>
+                    </div>
+                    <div class="field">
+                      <label>Tavsif</label>
+                      <input type="text" name="tavsif" value="{{tavsif}}">
+                    </div>
+                    <div class="field">
+                      <label>Bo'limlar (Sarlavha | Izoh)</label>
+                      <textarea name="bolimlar_matn" rows="3">{{bolimlar_matn}}</textarea>
+                    </div>
+                    <button class="btn-sm btn-primary" type="submit">O'zgarishlarni saqlash</button>
+                  </form>
+                </details>
+              </td>
+            </tr>
           {{/each}}
         </tbody>
       </table>

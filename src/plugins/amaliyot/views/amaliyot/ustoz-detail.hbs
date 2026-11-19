@@ -12,7 +12,14 @@
   </div>
 </div>
 
-<div class="grid two">
+<div class="grid stats">
+  <div class="stat"><b>{{stats.jamiKun}}</b><span>Kiritilgan kunlar</span></div>
+  <div class="stat blue"><b>{{stats.jamiSoat}}</b><span>Jami soat</span></div>
+  <div class="stat green"><b>{{stats.ustozTasdiq}}</b><span>Ustoz tasdiqlagan</span></div>
+  <div class="stat green"><b>{{stats.mentorTasdiq}}</b><span>Mentor tasdiqlagan</span></div>
+</div>
+
+<div class="grid two mt">
   <div class="card">
     <h2>Kundalik turini o'zgartirish</h2>
     <p class="muted">Hozirgi tur: <b>{{biriktirish.tur_nomi}}</b></p>
@@ -41,6 +48,49 @@
       <button class="btn" type="submit">Saqlash</button>
     </form>
   </div>
+</div>
+
+<div class="card">
+  <div class="spread">
+    <h2 class="mb0">Amaliyot muddati, korxona va holatini tahrirlash</h2>
+    <span class="badge {{biriktirish.holat_badge.cls}}">{{biriktirish.holat_badge.label}}</span>
+  </div>
+  <form class="mt" method="post" action="/amaliyot/biriktirish/{{biriktirish.id}}/tahrirlash" data-once>
+    {{> csrf}}
+    <div class="row">
+      <div class="field">
+        <label for="edit_korxona_id">Korxona</label>
+        <select id="edit_korxona_id" name="korxona_id" required>
+          {{#each korxonalar}}
+            <option value="{{id}}" {{sel id ../biriktirish.korxona_id}}>{{nomi}}</option>
+          {{/each}}
+        </select>
+      </div>
+      <div class="field">
+        <label for="edit_holat">Amaliyot holati</label>
+        <select id="edit_holat" name="holat" required>
+          <option value="faol" {{sel 'faol' biriktirish.holat}}>Faol</option>
+          <option value="yakunlangan" {{sel 'yakunlangan' biriktirish.holat}}>Yakunlangan</option>
+          <option value="bekor_qilingan" {{sel 'bekor_qilingan' biriktirish.holat}}>Bekor qilingan</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="edit_boshlanish">Boshlanish sanasi</label>
+        <input type="date" id="edit_boshlanish" name="boshlanish_sana" value="{{biriktirish.boshlanish_sana}}" required>
+      </div>
+      <div class="field">
+        <label for="edit_tugash">Tugash sanasi</label>
+        <input type="date" id="edit_tugash" name="tugash_sana" value="{{biriktirish.tugash_sana}}" required>
+      </div>
+      <div class="field">
+        <label for="edit_mavzu">Amaliyot mavzusi</label>
+        <input type="text" id="edit_mavzu" name="mavzu" value="{{biriktirish.mavzu}}" maxlength="300">
+      </div>
+    </div>
+    <button class="btn" type="submit">O'zgarishlarni saqlash</button>
+  </form>
 </div>
 
 <div class="card">

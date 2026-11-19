@@ -6,12 +6,12 @@
     <p class="muted mb0">{{mentorInfo.familiya}} {{mentorInfo.ism}} — {{mentorInfo.korxona_nomi}} ({{mentorInfo.lavozim}})</p>
   </div>
   <div class="actions">
-    <span class="badge {{mentorInfo.holat_badge.cls}}">Amal qilish muddati: {{mentorInfo.amal_qilish_fmt}}</span>
+    <span class="badge {{mentorInfo.holat_badge.cls}}">Qolgan vaqt: {{mentorInfo.qolgan_vaqt}} ({{mentorInfo.amal_qilish_fmt}} gacha)</span>
   </div>
 </div>
 
 <div class="alert info" role="status">
-  Ushbu mentor akkaunti bir martalik muddatga ochilgan (<b>{{mentorInfo.amal_qilish_fmt}}</b> gacha). Muddat tugagach akkaunt avtomatik muzlatiladi.
+  Ushbu mentor akkaunti bir martalik muddatga ochilgan (<b>{{mentorInfo.amal_qilish_fmt}}</b> gacha, qolgan vaqt: <b>{{mentorInfo.qolgan_vaqt}}</b>). Muddat tugagach akkaunt avtomatik muzlatiladi.
 </div>
 
 {{#unless biriktirishlar.length}}
@@ -33,9 +33,18 @@
         </div>
       </div>
 
-      <h3>Har kunlik kundalik yozuvlari ({{kundaliklar.length}} ta)</h3>
+      <div class="spread">
+        <h3 class="mb0">Har kunlik kundalik yozuvlari ({{kundaliklar.length}} ta)</h3>
+        {{#if kundaliklar.length}}
+          <form class="am-inline-form" method="post" action="/amaliyot/mentor/biriktirish/{{id}}/tasdiqlash-hammasi" data-once>
+            {{> csrf}}
+            <input class="am-compact-input am-w-md" type="text" name="fikr" placeholder="Umumiy fikr (ixtiyoriy)">
+            <button class="btn-sm btn-green" type="submit">Kutilayotganlarni barchasini tasdiqlash</button>
+          </form>
+        {{/if}}
+      </div>
       {{#if kundaliklar.length}}
-        <div class="table-wrap">
+        <div class="table-wrap mt">
           <table class="stack">
             <thead>
               <tr>

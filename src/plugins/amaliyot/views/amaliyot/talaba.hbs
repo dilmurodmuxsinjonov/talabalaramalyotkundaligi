@@ -14,16 +14,50 @@
   {{/if}}
 </div>
 
+{{#if hasMultiple}}
+  <div class="card">
+    <b>Amaliyotlaringiz:</b>
+    <div class="am-inline-form mt">
+      {{#each biriktirishlar}}
+        <a class="btn btn-sm {{#if is_selected}}btn-primary{{/if}}" href="/amaliyot?b={{id}}">
+          {{tur_nomi}} — {{korxona_nomi}} ({{boshlanish_fmt}})
+        </a>
+      {{/each}}
+    </div>
+  </div>
+{{/if}}
+
+{{#if notifications.length}}
+  <div class="card">
+    <h3>So'nggi xabarnomalar</h3>
+    <ul class="mb0">
+      {{#each notifications}}
+        <li><small class="mono muted">{{vaqt_fmt}}</small> — {{matn}}</li>
+      {{/each}}
+    </ul>
+  </div>
+{{/if}}
+
 {{#unless active}}
   <div class="card">
     <h2>Amaliyot biriktirishi hali yaratilmagan</h2>
     <p class="muted mb0">Siz hali korxonaga biriktirilmagansiz. Biriktirilgan ustozingizga yoki dekanatga murojaat qiling.</p>
   </div>
 {{else}}
-  <div class="grid two">
+  <div class="grid stats">
+    <div class="stat"><b>{{stats.jamiKun}}</b><span>Kiritilgan kunlar</span></div>
+    <div class="stat blue"><b>{{stats.jamiSoat}}</b><span>Jami soat</span></div>
+    <div class="stat green"><b>{{stats.ustozTasdiq}}</b><span>Ustoz tasdiqlagan</span></div>
+    <div class="stat green"><b>{{stats.mentorTasdiq}}</b><span>Mentor tasdiqlagan</span></div>
+  </div>
+
+  <div class="grid two mt">
     <div class="card">
-      <h2>Biriktirilgan amaliyot ma'lumotlari</h2>
-      <dl class="kv">
+      <div class="spread">
+        <h2 class="mb0">Biriktirilgan amaliyot ma'lumotlari</h2>
+        <span class="badge {{active.holat_badge.cls}}">{{active.holat_badge.label}}</span>
+      </div>
+      <dl class="kv mt">
         <dt>Kundalik turi</dt><dd><b>{{active.tur_nomi}}</b></dd>
         <dt>Korxona</dt><dd>{{active.korxona_nomi}}{{#if active.korxona_manzil}} ({{active.korxona_manzil}}){{/if}}</dd>
         <dt>Muddat</dt><dd class="mono">{{active.boshlanish_fmt}} — {{active.tugash_fmt}}</dd>
@@ -58,14 +92,17 @@
     </div>
 
     <div class="card">
-      <h2>Kunlik ish yozuvini qo'shish / tahrirlash</h2>
-      <form method="post" action="/amaliyot/kundalik" data-once>
+      <div class="spread">
+        <h2 class="mb0">Kunlik ish yozuvini qo'shish / tahrirlash</h2>
+        <button type="button" class="btn-sm" id="am-reset-form">Tozalash</button>
+      </div>
+      <form class="mt" method="post" action="/amaliyot/kundalik" data-once>
         {{> csrf}}
         <input type="hidden" name="biriktirish_id" value="{{active.id}}">
         <div class="row">
           <div class="field">
             <label for="am-sana">Sana</label>
-            <input type="date" id="am-sana" name="sana" value="{{bugun}}" min="{{active.boshlanish_sana}}" max="{{active.tugash_sana}}" required>
+            <input type="date" id="am-sana" name="sana" value="{{bugun}}" data-default-date="{{bugun}}" min="{{active.boshlanish_sana}}" max="{{active.tugash_sana}}" required>
           </div>
           <div class="field">
             <label for="am-soat">Soat</label>
@@ -130,6 +167,12 @@
                     data-am-fill-mazmun="{{ish_mazmuni}}"
                     data-am-fill-natija="{{natija}}"
                   >Tahrirlash</button>
+                  {{#if can_delete}}
+                    <form method="post" action="/amaliyot/kundalik/{{id}}/ochirish" data-once>
+                      {{> csrf}}
+                      <button type="submit" class="btn-sm btn-red" data-confirm="Ushbu yozuvni o'chirasizmi?">O'chirish</button>
+                    </form>
+                  {{/if}}
                 </td>
               </tr>
             {{/each}}
