@@ -215,6 +215,14 @@ function buildBolimlarXml(bolimlar, javoblar = {}) {
   ].join('');
 }
 
+function calendarDaysBetween(startYmd, endYmd) {
+  if (!startYmd || !endYmd) return 14;
+  const s = Date.parse(`${startYmd}T00:00:00Z`);
+  const e = Date.parse(`${endYmd}T00:00:00Z`);
+  if (Number.isNaN(s) || Number.isNaN(e) || e < s) return 14;
+  return Math.round((e - s) / 86_400_000) + 1;
+}
+
 /**
  * Standart Amaliyot kundaligi (.docx)
  */
@@ -222,7 +230,17 @@ function buildKundalikDocx({ biriktirish: b, kundaliklar = [], xulosa = null }) 
   const bolimlar = Array.isArray(b.bolimlar_json) ? b.bolimlar_json : [];
   const javoblar = xulosa?.bolimlar_javobi || {};
 
+  let totalHours = 0;
+  let ustozApproved = 0;
+  let mentorApproved = 0;
+  const mentorNotes = [];
+
   const rows = kundaliklar.map((k, idx) => {
+    totalHours += Number(k.soat || 0);
+    if (k.ustoz_holat === 'tasdiqlandi') ustozApproved += 1;
+    if (k.mentor_holat === 'tasdiqlandi') mentorApproved += 1;
+    if (k.mentor_fikr) mentorNotes.push(`${fmtDate(k.sana)}: ${k.mentor_fikr}`);
+
     const ustozSt = `${HOLAT_UZ[k.ustoz_holat] || k.ustoz_holat}${k.ustoz_izoh ? `\nIzoh: ${k.ustoz_izoh}` : ''}`;
     const mentorSt = `${HOLAT_UZ[k.mentor_holat] || k.mentor_holat}${k.mentor_fikr ? `\nFikr: ${k.mentor_fikr}` : ''}`;
     return [
@@ -237,15 +255,27 @@ function buildKundalikDocx({ biriktirish: b, kundaliklar = [], xulosa = null }) 
   });
 
   // Yuklab olinganda Word'da ham qo'shimcha kunlarni to'ldirib borish uchun standart bo'sh qatorlar
-  const minRows = Math.max(14, rows.length + 3);
-  for (let i = rows.length; i < minRows; i++) {
+  const expectedDays = Math.min(35, Math.max(14, calendarDaysBetween(b.boshlanish_sana, b.tugash_sana)));
+  const targetRows = Math.max(expectedDays, rows.length + 3);
+  for (let i = rows.length; i < targetRows; i++) {
     rows.push([String(i + 1), '__.__.202_', '', '___', '', '__________', '__________']);
   }
+
+  const mentorUmumiyFikr = [
+    xulosa?.mentor_fikr ? `Xulosa bo'yicha mentor fikri: ${xulosa.mentor_fikr}` : '',
+    ...mentorNotes,
+  ].filter(Boolean).join('\n');
 
   const body = [
     p('O\'ZBEKISTON RESPUBLIKASI OLIY TA\'LIM, FAN VA INNOVATSIYALAR VAZIRLIGI', { bold: true, center: true, size: 22, after: 40 }),
     p('TALABANING STANDART AMALIYOT KUNDALIGI', { bold: true, center: true, size: 28, after: 140 }),
     buildInfoTable(b),
+    p('', { after: 80 }),
+    table(
+      ['Kiritilgan kunlar', 'Jami soat', 'Ustoz tasdiqlagan', 'Mentor tasdiqlagan'],
+      [[String(kundaliklar.length), String(totalHours), String(ustozApproved), String(mentorApproved)]],
+      [2400, 2400, 2400, 2400],
+    ),
     p('', { after: 100 }),
     buildBolimlarXml(bolimlar, javoblar),
     p('2-BO\'LIM. HAR KUNLIK BAJARILGAN ISHLAR QAYDNOMASI', { bold: true, size: 24, after: 80 }),
@@ -254,8 +284,12 @@ function buildKundalikDocx({ biriktirish: b, kundaliklar = [], xulosa = null }) 
       rows,
       [500, 1100, 3000, 650, 1650, 1350, 1350],
     ),
-    p('', { after: 140 }),
-    p('3-BO\'LIM. IMZOLAR VA TASDIQ', { bold: true, size: 24, after: 80 }),
+    p('', { after: 100 }),
+    p('3-BO\'LIM. KORXONA MENTORI FIKRI VA IMZOLAR', { bold: true, size: 24, after: 80 }),
+    table(null, [
+      ['Korxona mentori qo\'shimcha fikri', mentorUmumiyFikr || '________________________________________________________\n________________________________________________________'],
+    ], [3200, 6400]),
+    p('', { after: 100 }),
     table(null, [
       ['Talaba', b.student_fio || '—', 'Imzo: ______________   Sana: __.__.202_'],
       ['Korxona mentori', b.mentor_fio || '________________', 'Imzo / Muhr: ______________   Sana: __.__.202_'],

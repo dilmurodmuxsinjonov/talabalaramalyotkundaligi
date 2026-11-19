@@ -81,7 +81,20 @@ async function assertBiriktirishAccess(actor, b, req, mode = 'view') {
   throw forbidden();
 }
 
-async function getStudentDashboard(studentId) {
+async function getRecentNotifications(userId, limit = 5) {
+  const { rows } = await db.query(
+    `SELECT id, matn, holat, created_at
+       FROM bildirishnomalar
+      WHERE user_id = $1
+      ORDER BY id DESC
+      LIMIT $2`,
+    [userId, limit],
+  );
+  return rows;
+}
+
+async function getStudentDashboard(studentId, selectedId = null, req = null) {
+  await freezeExpiredMentors(db, req);
   const { rows: biriktirishlar } = await db.query(
     `SELECT b.*,
             t.nomi AS tur_nomi, t.kod AS tur_kod, t.bolimlar_json, t.kunlik_min_soat,
@@ -99,7 +112,10 @@ async function getStudentDashboard(studentId) {
     [studentId],
   );
 
-  const active = biriktirishlar.find((x) => x.holat === 'faol') || biriktirishlar[0] || null;
+  const active = (selectedId && biriktirishlar.find((x) => x.id === Number(selectedId)))
+    || biriktirishlar.find((x) => x.holat === 'faol')
+    || biriktirishlar[0]
+    || null;
   let kundaliklar = [];
   let xulosa = null;
   if (active) {
@@ -112,7 +128,8 @@ async function getStudentDashboard(studentId) {
       [active.id],
     )).rows[0] || null;
   }
-  return { biriktirishlar, active, kundaliklar, xulosa };
+  const notifications = await getRecentNotifications(studentId, 4);
+  return { biriktirishlar, active, kundaliklar, xulosa, notifications };
 }
 
 async function getBiriktirishFull(biriktirishId) {
@@ -136,6 +153,7 @@ async function getUstozDashboard(actor, req) {
     { rows: talabalar },
     korxonalar,
     turlar,
+    notifications,
   ] = await Promise.all([
     db.query(
       `SELECT b.*,
@@ -182,6 +200,7 @@ async function getUstozDashboard(actor, req) {
     ),
     getKorxonalar({ onlyActive: true }),
     getTurlar({ onlyActive: true }),
+    getRecentNotifications(actor.id, 5),
   ]);
 
   const activeMentors = mentorlar.filter((m) => m.holat === 'tasdiqlandi');
@@ -195,6 +214,7 @@ async function getUstozDashboard(actor, req) {
     talabalar,
     korxonalar,
     turlar,
+    notifications,
   };
 }
 
@@ -311,6 +331,62 @@ async function assignMentorToBiriktirish(biriktirishId, mentorId, actor, req) {
       eski: { mentor_id: b.mentor_id },
       yangi: { mentor_id: validMentorId },
     });
+  });
+}
+
+async function updateBiriktirish(biriktirishId, { korxonaId, boshlanishSana, tugashSana, mavzu, holat }, actor, req) {
+  if (tugashSana < boshlanishSana) {
+    throw new AppError('Tugash sanasi boshlanish sanasidan oldin bo\'lishi mumkin emas', 400);
+  }
+  const b = await getBiriktirishDetail(biriktirishId);
+  await assertBiriktirishAccess(actor, b, req, 'manage');
+  return db.tx(async (client) => {
+    const { rows: [kor] } = await client.query('SELECT id FROM amaliyot_korxonalar WHERE id = $1', [korxonaId]);
+    if (!kor) throw new AppError('Korxona topilmadi', 400);
+    const { rows: [updated] } = await client.query(
+      `UPDATE amaliyot_biriktirishlar
+          SET korxona_id = $1,
+              boshlanish_sana = $2,
+              tugash_sana = $3,
+              mavzu = $4,
+              holat = $5,
+              updated_at = now()
+        WHERE id = $6 RETURNING *`,
+      [kor.id, boshlanishSana, tugashSana, mavzu || null, holat, b.id],
+    );
+    if (holat !== b.holat) {
+      await notify(client, b.student_id, `Amaliyot holatingiz "${holat}" ga o'zgartirildi.`);
+    }
+    await audit({
+      client,
+      req,
+      amal: 'amaliyot.biriktirish_update',
+      obyekt: 'amaliyot_biriktirishlar',
+      obyektId: b.id,
+      eski: { korxona_id: b.korxona_id, boshlanish_sana: b.boshlanish_sana, tugash_sana: b.tugash_sana, holat: b.holat },
+      yangi: { korxona_id: kor.id, boshlanish_sana: boshlanishSana, tugash_sana: tugashSana, holat },
+    });
+    return updated;
+  });
+}
+
+async function deleteKundalik(kundalikId, studentId, req) {
+  return db.tx(async (client) => {
+    const { rows: [k] } = await client.query(
+      `SELECT ak.*, ab.student_id
+         FROM amaliyot_kundalik ak
+         JOIN amaliyot_biriktirishlar ab ON ab.id = ak.biriktirish_id
+        WHERE ak.id = $1 FOR UPDATE`,
+      [kundalikId],
+    );
+    if (!k) throw notFound('Kundalik yozuvi topilmadi');
+    if (k.student_id !== studentId) throw forbidden();
+    if (k.ustoz_holat === 'tasdiqlandi' || k.mentor_holat === 'tasdiqlandi') {
+      throw new AppError('Tasdiqlangan kunlik yozuvni o\'chirib bo\'lmaydi', 400);
+    }
+    await client.query('DELETE FROM amaliyot_kundalik WHERE id = $1', [k.id]);
+    await audit({ client, req, amal: 'amaliyot.kundalik_delete', obyekt: 'amaliyot_kundalik', obyektId: k.id, eski: k });
+    return k.biriktirish_id;
   });
 }
 
@@ -519,7 +595,7 @@ async function registerMentor(data, req) {
   });
 }
 
-async function reviewMentorByUstoz({ mentorId, action, muddatKun, radSababi }, actor, req) {
+async function reviewMentorByUstoz({ mentorId, action, muddatKun, muddatBirlik = 'kun', korxonaId: selectedKorxonaId = null, radSababi }, actor, req) {
   return db.tx(async (client) => {
     const { rows: [m] } = await client.query('SELECT * FROM amaliyot_mentorlar WHERE id = $1 FOR UPDATE', [mentorId]);
     if (!m) throw notFound('Mentor topilmadi');
@@ -531,11 +607,21 @@ async function reviewMentorByUstoz({ mentorId, action, muddatKun, radSababi }, a
       if (m.holat !== 'kutilmoqda') {
         throw new AppError('Faqat tasdiqlash kutilayotgan mentor arizasini bir martalik faollashtirish mumkin', 400);
       }
-      const days = Number(muddatKun);
-      if (!Number.isInteger(days) || days < 1 || days > 365) {
-        throw new AppError('Bir martalik amal qilish muddati 1 dan 365 kungacha bo\'lishi kerak', 400);
+      const val = Number(muddatKun);
+      const isHours = muddatBirlik === 'soat';
+      if (!Number.isInteger(val) || val < 1 || val > (isHours ? 720 : 365)) {
+        throw new AppError(
+          isHours
+            ? 'Bir martalik amal qilish muddati 1 dan 720 soatgacha bo\'lishi kerak'
+            : 'Bir martalik amal qilish muddati 1 dan 365 kungacha bo\'lishi kerak',
+          400,
+        );
       }
-      let korxonaId = m.korxona_id;
+      let korxonaId = selectedKorxonaId || m.korxona_id;
+      if (korxonaId) {
+        const { rows: [k] } = await client.query('SELECT id FROM amaliyot_korxonalar WHERE id = $1', [korxonaId]);
+        if (!k) korxonaId = null;
+      }
       if (!korxonaId && m.korxona_nomi_kiritilgan) {
         const { rows: [found] } = await client.query(
           'SELECT id FROM amaliyot_korxonalar WHERE lower(nomi) = lower($1)',
@@ -551,21 +637,31 @@ async function reviewMentorByUstoz({ mentorId, action, muddatKun, radSababi }, a
           korxonaId = newK.id;
         }
       }
+      const storedDays = isHours ? Math.max(1, Math.ceil(val / 24)) : val;
+      const intervalSql = isHours ? 'now() + make_interval(hours => $2)' : 'now() + make_interval(days => $2)';
       const { rows: [updated] } = await client.query(
         `UPDATE amaliyot_mentorlar
             SET holat = 'tasdiqlandi',
                 korxona_id = COALESCE($1, korxona_id),
-                bir_martalik_muddat_kun = $2,
-                amal_qilish_gacha = now() + make_interval(days => $2),
-                tasdiqlagan_id = $3,
+                bir_martalik_muddat_kun = $3,
+                amal_qilish_gacha = ${intervalSql},
+                tasdiqlagan_id = $4,
                 tasdiqlangan_vaqt = now(),
                 muzlatilgan_vaqt = NULL,
                 rad_sababi = NULL,
                 updated_at = now()
-          WHERE id = $4 RETURNING *`,
-        [korxonaId, days, actor.id, m.id],
+          WHERE id = $5 RETURNING *`,
+        [korxonaId, val, storedDays, actor.id, m.id],
       );
-      await audit({ client, req, amal: 'amaliyot.mentor_approve', obyekt: 'amaliyot_mentorlar', obyektId: m.id, eski: { holat: m.holat }, yangi: { holat: 'tasdiqlandi', muddat_kun: days } });
+      await audit({
+        client,
+        req,
+        amal: 'amaliyot.mentor_approve',
+        obyekt: 'amaliyot_mentorlar',
+        obyektId: m.id,
+        eski: { holat: m.holat },
+        yangi: { holat: 'tasdiqlandi', muddat: val, birlik: isHours ? 'soat' : 'kun' },
+      });
       return updated;
     }
 
@@ -670,6 +766,27 @@ async function reviewKundalikByMentor({ kundalikId, holat, fikr }, mentor, req) 
   });
 }
 
+async function approveAllKundalikByMentor(biriktirishId, mentor, fikr, req) {
+  const b = await getBiriktirishDetail(biriktirishId);
+  if (b.mentor_id !== mentor.id) throw forbidden('Bu talaba sizga biriktirilmagan');
+  return db.tx(async (client) => {
+    const { rowCount } = await client.query(
+      `UPDATE amaliyot_kundalik
+          SET mentor_holat = 'tasdiqlandi',
+              mentor_fikr = COALESCE(NULLIF($2::text, ''), mentor_fikr),
+              mentor_tasdiqlagan_vaqt = now(),
+              updated_at = now()
+        WHERE biriktirish_id = $1 AND mentor_holat = 'kutilmoqda'`,
+      [b.id, fikr || ''],
+    );
+    if (rowCount > 0 && fikr) {
+      await notify(client, b.student_id, `Korxona mentori ${rowCount} ta kundalik yozuvingizni tasdiqladi (Fikr: ${fikr}).`);
+    }
+    await audit({ client, req, userId: null, amal: 'amaliyot.kundalik_mentor_batch', obyekt: 'amaliyot_biriktirishlar', obyektId: b.id, yangi: { mentor_id: mentor.id, tasdiqlandi: rowCount } });
+    return rowCount;
+  });
+}
+
 async function reviewXulosaByMentor({ xulosaId, holat, fikr }, mentor, req) {
   const { rows: [x] } = await db.query('SELECT * FROM amaliyot_xulosalar WHERE id = $1', [xulosaId]);
   if (!x) throw notFound('Xulosalar kitobchasi topilmadi');
@@ -704,6 +821,22 @@ async function createTur({ kod, nomi, tavsif, kunlikMinSoat, bolimlar }, actor, 
   return created;
 }
 
+async function updateTur(turId, { nomi, tavsif, kunlikMinSoat, bolimlar }, actor, req) {
+  const { rows: [old] } = await db.query('SELECT * FROM amaliyot_turlar WHERE id = $1', [turId]);
+  if (!old) throw notFound('Amaliyot turi topilmadi');
+  const { rows: [updated] } = await db.query(
+    `UPDATE amaliyot_turlar
+        SET nomi = $1,
+            tavsif = $2,
+            kunlik_min_soat = $3,
+            bolimlar_json = $4::jsonb
+      WHERE id = $5 RETURNING *`,
+    [nomi, tavsif || null, kunlikMinSoat, JSON.stringify(bolimlar), turId],
+  );
+  await audit({ req, amal: 'amaliyot.tur_update', obyekt: 'amaliyot_turlar', obyektId: turId, eski: old, yangi: updated });
+  return updated;
+}
+
 async function toggleTurStatus(turId, req) {
   const { rows: [t] } = await db.query(
     'UPDATE amaliyot_turlar SET faol = NOT faol WHERE id = $1 RETURNING *',
@@ -725,9 +858,11 @@ module.exports = {
   getUstozDashboard,
   createKorxona,
   createBiriktirish,
+  updateBiriktirish,
   changeDiaryType,
   assignMentorToBiriktirish,
   upsertKundalik,
+  deleteKundalik,
   upsertXulosa,
   reviewKundalikByUstoz,
   approveAllKundalikByUstoz,
@@ -737,7 +872,9 @@ module.exports = {
   authenticateMentorByGoogle,
   getMentorDashboard,
   reviewKundalikByMentor,
+  approveAllKundalikByMentor,
   reviewXulosaByMentor,
   createTur,
+  updateTur,
   toggleTurStatus,
 };

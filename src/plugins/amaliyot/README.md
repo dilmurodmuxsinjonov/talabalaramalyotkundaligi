@@ -24,6 +24,7 @@ Talabalarning ishlab chiqarish, o'quv-tanishuv, malakaviy va diplomoldi amaliyot
 |---|---|---|---|
 | `GET` | `/amaliyot` | `student` | Talaba kundaligi bosh sahifasi |
 | `POST` | `/amaliyot/kundalik` | `student` | Kunlik yozuv qo'shish / tahrirlash |
+| `POST` | `/amaliyot/kundalik/:id/ochirish` | `student` | Tasdiqlanmagan kunlik yozuvini o'chirish |
 | `GET/POST` | `/amaliyot/xulosa` | `student` | Xulosalar kitobchasini to'ldirish / topshirish |
 | `GET` | `/amaliyot/:id/docx` | `student`, `teacher`, `dekanat`, `admin` | Standart kundalikni `.docx` formatida yuklab olish |
 | `GET` | `/amaliyot/:id/xulosa-docx` | `student`, `teacher`, `dekanat`, `admin` | Xulosalar kitobchasini `.docx` formatida yuklab olish |
@@ -31,17 +32,20 @@ Talabalarning ishlab chiqarish, o'quv-tanishuv, malakaviy va diplomoldi amaliyot
 | `GET` | `/amaliyot/ustoz/talaba/:id` | `teacher`, `dekanat`, `admin` | Talaba kundaligi va xulosasini tekshirish |
 | `POST` | `/amaliyot/korxona` | `teacher`, `dekanat`, `admin` | Yangi korxona qo'shish |
 | `POST` | `/amaliyot/biriktirish` | `teacher`, `dekanat`, `admin` | Talabani amaliyotga biriktirish |
+| `POST` | `/amaliyot/biriktirish/:id/tahrirlash` | `teacher`, `dekanat`, `admin` | Amaliyot muddati, korxona va holatini tahrirlash |
 | `POST` | `/amaliyot/biriktirish/:id/tur` | `teacher`, `dekanat`, `admin` | Kundalik turini o'zgartirish |
 | `POST` | `/amaliyot/biriktirish/:id/mentor` | `teacher`, `dekanat`, `admin` | Biriktirilgan mentorni yangilash |
 | `POST` | `/amaliyot/kundalik/:id/ustoz-holat` | `teacher`, `dekanat`, `admin` | Kunlik yozuvni tasdiqlash / qaytarish |
 | `POST` | `/amaliyot/xulosa/:id/ustoz-holat` | `teacher`, `dekanat`, `admin` | Xulosalar kitobchasini tasdiqlash / baholash |
-| `POST` | `/amaliyot/mentor/:id/tasdiqlash` | `teacher`, `dekanat`, `admin` | Mentorni tasdiqlash va bir martalik muddat belgilash |
+| `POST` | `/amaliyot/mentor/:id/tasdiqlash` | `teacher`, `dekanat`, `admin` | Mentorni tasdiqlash va bir martalik muddat (kun/soat) belgilash |
 | `GET/POST` | `/admin/amaliyot/turlar` | `teacher`, `dekanat`, `admin` | Kundalik turlari va bo'limlarini boshqarish |
+| `POST` | `/admin/amaliyot/turlar/:id` | `teacher`, `dekanat`, `admin` | Mavjud kundalik turini tahrirlash |
 | `GET/POST` | `/amaliyot/mentor/royxat` | Ochiq | Mentor Google ro'yxatdan o'tishi |
 | `GET/POST` | `/amaliyot/mentor/kirish` | Ochiq | Mentor kirishi |
 | `GET` | `/amaliyot/mentor/google` | Ochiq | Google OAuth 2.0 boshlash |
 | `GET` | `/amaliyot/mentor/google/callback` | Ochiq | Google OAuth 2.0 callback |
 | `GET` | `/amaliyot/mentor` | `mentor` (faol) | Mentor paneli |
+| `POST` | `/amaliyot/mentor/biriktirish/:id/tasdiqlash-hammasi` | `mentor` (faol) | Barcha kutilayotgan kunlik yozuvlarni tasdiqlash |
 | `POST` | `/amaliyot/mentor/kundalik/:id/holat` | `mentor` (faol) | Kundalikni tasdiqlash + ixtiyoriy fikr |
 | `POST` | `/amaliyot/mentor/xulosa/:id/holat` | `mentor` (faol) | Xulosani tasdiqlash + ixtiyoriy fikr |
 

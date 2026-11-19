@@ -150,6 +150,18 @@ test('Asosiy oqim: mentor Google ro\'yxatdan o\'tishi -> ustoz tasdig\'i -> tala
   });
   assert.equal(badK.status, 400);
 
+  // 6b. Tasdiqlanmagan kundalik yozuvini o'chirish mumkin, tasdiqlangandan keyin esa mumkin emas
+  const delDraftRes = await st1.form('/amaliyot/kundalik', {
+    biriktirish_id: String(biriktirish.id),
+    sana: bugun,
+    ish_mazmuni: 'Vaqtinchalik qoralama yozuvi',
+    soat: '4',
+  });
+  assert.equal(delDraftRes.status, 302);
+  const { rows: [draftK] } = await pool.query('SELECT id FROM amaliyot_kundalik WHERE biriktirish_id = $1', [biriktirish.id]);
+  assert.equal((await st1.form(`/amaliyot/kundalik/${draftK.id}/ochirish`)).status, 302);
+  assert.equal((await pool.query('SELECT count(*)::int AS n FROM amaliyot_kundalik WHERE biriktirish_id = $1', [biriktirish.id])).rows[0].n, 0);
+
   const okK = await st1.form('/amaliyot/kundalik', {
     biriktirish_id: String(biriktirish.id),
     sana: bugun,
@@ -178,6 +190,9 @@ test('Asosiy oqim: mentor Google ro\'yxatdan o\'tishi -> ustoz tasdig\'i -> tala
     fikr: 'Talaba mas\'uliyat bilan ishladi',
   });
   assert.equal(mRev.status, 302);
+
+  // Tasdiqlangan yozuvni talaba o'chira olmaydi (400)
+  assert.equal((await st1.form(`/amaliyot/kundalik/${kundalikRow.id}/ochirish`)).status, 400);
 
   // Ustoz ham kundalik va xulosani tasdiqlaydi
   const uRev = await ustoz.form(`/amaliyot/kundalik/${kundalikRow.id}/ustoz-holat`, {
@@ -239,9 +254,21 @@ test('Asosiy oqim: mentor Google ro\'yxatdan o\'tishi -> ustoz tasdig\'i -> tala
     muddat_kun: '7',
   });
   assert.equal(reApprove.status, 400);
+  // 10. Ustoz amaliyot ma'lumotlarini tahrirlaydi va yakunlaydi
+  const editBir = await ustoz.form(`/amaliyot/biriktirish/${biriktirish.id}/tahrirlash`, {
+    korxona_id: String(korxona.id),
+    boshlanish_sana: bugun,
+    tugash_sana: bugun,
+    mavzu: 'Yangilangan Node.js amaliyot mavzusi',
+    holat: 'yakunlangan',
+  });
+  assert.equal(editBir.status, 302);
+  const { rows: [finB] } = await pool.query('SELECT holat, mavzu FROM amaliyot_biriktirishlar WHERE id = $1', [biriktirish.id]);
+  assert.equal(finB.holat, 'yakunlangan');
+  assert.equal(finB.mavzu, 'Yangilangan Node.js amaliyot mavzusi');
 });
 
-test('Izolyatsiya va kundalik turlari: yangi tur yaratish va dekanat/mentor chegaralari', async () => {
+test('Izolyatsiya va kundalik turlari: yangi tur yaratish, tahrirlash va soatlik mentor muddati', async () => {
   const adm = await login(app, 'admin', 'admin12345');
   const tRes = await adm.form('/admin/amaliyot/turlar', {
     kod: 'pedagogik_sinov',
@@ -255,12 +282,84 @@ test('Izolyatsiya va kundalik turlari: yangi tur yaratish va dekanat/mentor cheg
   assert.equal(tur.nomi, 'Pedagogik amaliyot');
   assert.equal(tur.bolimlar_json.length, 2);
 
+  // Kundalik turini tahrirlash
+  const tEdit = await adm.form(`/admin/amaliyot/turlar/${tur.id}`, {
+    nomi: 'Pedagogik va metodik amaliyot',
+    tavsif: 'Yangilangan tavsif',
+    kunlik_min_soat: '6',
+    bolimlar_matn: 'Dars konspekti | Yangilangan izoh',
+  });
+  assert.equal(tEdit.status, 302);
+  const { rows: [turEdited] } = await pool.query('SELECT * FROM amaliyot_turlar WHERE id = $1', [tur.id]);
+  assert.equal(turEdited.nomi, 'Pedagogik va metodik amaliyot');
+  assert.equal(turEdited.bolimlar_json.length, 1);
+
+  // Soatlik bir martalik muddat + yangi korxona nomini avtomatik yaratish + mentor batch tasdiqlash
+  const ustozId = await userId('karimova');
+  const mentor2Agent = request.agent(app);
+  const regP = await mentor2Agent.get('/amaliyot/mentor/royxat');
+  await mentor2Agent.post('/amaliyot/mentor/royxat').type('form').send({
+    _csrf: csrfOf(regP.text),
+    email: 'soatlik.mentor@gmail.com',
+    familiya: 'Toshmatov',
+    ism: 'Akmal',
+    lavozim: 'Team Lead',
+    korxona_nomi: 'Avto Yaratilgan Korxona MChJ',
+    ustoz_id: String(ustozId),
+  });
+  const { rows: [m2] } = await pool.query("SELECT * FROM amaliyot_mentorlar WHERE email = 'soatlik.mentor@gmail.com'");
+  const karimova = await login(app, 'karimova');
+  const app2 = await karimova.form(`/amaliyot/mentor/${m2.id}/tasdiqlash`, {
+    action: 'tasdiqlash',
+    muddat_kun: '2',
+    muddat_birlik: 'soat',
+  });
+  assert.equal(app2.status, 302);
+
+  const { rows: [m2Updated] } = await pool.query('SELECT * FROM amaliyot_mentorlar WHERE id = $1', [m2.id]);
+  assert.equal(m2Updated.holat, 'tasdiqlandi');
+  assert.ok(m2Updated.korxona_id, 'Yangi korxona avtomatik yaratilib bog\'lanishi kerak');
+
+  const talaba2Id = await userId('talaba2');
+  const bugun = today();
+  await karimova.form('/amaliyot/biriktirish', {
+    student_id: String(talaba2Id),
+    korxona_id: String(m2Updated.korxona_id),
+    mentor_id: String(m2.id),
+    tur_id: String(tur.id),
+    boshlanish_sana: bugun,
+    tugash_sana: bugun,
+  });
+  const { rows: [b2] } = await pool.query('SELECT id FROM amaliyot_biriktirishlar WHERE student_id = $1', [talaba2Id]);
+  const st2 = await login(app, 'talaba2');
+  await st2.form('/amaliyot/kundalik', {
+    biriktirish_id: String(b2.id),
+    sana: bugun,
+    ish_mazmuni: 'Batch tasdiqlash uchun kunlik ish',
+    soat: '6',
+  });
+
+  const lPage = await mentor2Agent.get('/amaliyot/mentor/kirish');
+  await mentor2Agent.post('/amaliyot/mentor/kirish').type('form').send({
+    _csrf: csrfOf(lPage.text),
+    email: 'soatlik.mentor@gmail.com',
+  });
+  const dash2 = await mentor2Agent.get('/amaliyot/mentor');
+  assert.equal(dash2.status, 200);
+  const batchRes = await mentor2Agent.post(`/amaliyot/mentor/biriktirish/${b2.id}/tasdiqlash-hammasi`).type('form').send({
+    _csrf: csrfOf(dash2.text),
+    fikr: 'Hammasi a\'lo',
+  });
+  assert.equal(batchRes.status, 302);
+  const { rows: [k2] } = await pool.query('SELECT mentor_holat, mentor_fikr FROM amaliyot_kundalik WHERE biriktirish_id = $1', [b2.id]);
+  assert.equal(k2.mentor_holat, 'tasdiqlandi');
+  assert.equal(k2.mentor_fikr, 'Hammasi a\'lo');
+
   // Iqtisodiyot dekani AT talabasini biriktira olmaydi (403)
   await adm.form('/amaliyot/korxona', { nomi: 'Test Izolyatsiya MChJ' });
   const iqDek = await login(app, 'dekan_iq');
   const talaba1Id = await userId('talaba1');
   const { rows: [kor] } = await pool.query("SELECT id FROM amaliyot_korxonalar WHERE nomi = 'Test Izolyatsiya MChJ'");
-  const bugun = today();
   const crossFac = await iqDek.form('/amaliyot/biriktirish', {
     student_id: String(talaba1Id),
     korxona_id: String(kor.id),

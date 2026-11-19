@@ -16,6 +16,17 @@
   </div>
 {{/if}}
 
+{{#if notifications.length}}
+  <div class="card">
+    <h3>So'nggi xabarnomalar</h3>
+    <ul class="mb0">
+      {{#each notifications}}
+        <li><small class="mono muted">{{vaqt_fmt}}</small> — {{matn}}</li>
+      {{/each}}
+    </ul>
+  </div>
+{{/if}}
+
 <div class="grid two">
   <div class="card">
     <h2>Talabani korxonaga biriktirish</h2>
@@ -108,10 +119,13 @@
 </div>
 
 <div class="card">
-  <h2>Biriktirilgan talabalar ({{biriktirishlar.length}} ta)</h2>
+  <div class="spread">
+    <h2 class="mb0">Biriktirilgan talabalar ({{biriktirishlar.length}} ta)</h2>
+    <input class="am-compact-input am-w-md" type="search" id="am-student-filter" placeholder="Talaba, guruh yoki korxona qidirish...">
+  </div>
   {{#if biriktirishlar.length}}
-    <div class="table-wrap">
-      <table class="stack">
+    <div class="table-wrap mt">
+      <table class="stack" id="am-student-table">
         <thead>
           <tr>
             <th>Talaba</th>
@@ -187,15 +201,28 @@
               <td data-l="Holat">
                 <span class="badge {{holat_badge.cls}}">{{holat_badge.label}}</span>
                 {{#if amal_qilish_gacha}}
-                  <div><small class="muted">Muddat: {{amal_qilish_fmt}} ({{bir_martalik_muddat_kun}} kun)</small></div>
+                  <div><small class="muted">Muddat: {{amal_qilish_fmt}}</small></div>
+                  {{#if is_active}}<div><small class="mono">Qolgan: {{qolgan_vaqt}}</small></div>{{/if}}
                 {{/if}}
               </td>
               <td data-l="Boshqarish" class="actions">
                 {{#if is_pending}}
                   <form class="am-inline-form" method="post" action="/amaliyot/mentor/{{id}}/tasdiqlash" data-once>
                     {{> csrf}}
-                    <input class="am-compact-input am-w-sm" type="number" name="muddat_kun" min="1" max="365" value="14" title="Bir martalik muddat (kun)" required>
-                    <button class="btn-sm btn-green" type="submit" name="action" value="tasdiqlash">Tasdiqlash (kun)</button>
+                    {{#unless korxona_id}}
+                      <select class="am-compact-input am-w-md" name="korxona_id" title="Mavjud korxonaga bog'lash (ixtiyoriy)">
+                        <option value="">Yangi korxona yaratish</option>
+                        {{#each ../korxonalar}}
+                          <option value="{{id}}">{{nomi}}</option>
+                        {{/each}}
+                      </select>
+                    {{/unless}}
+                    <input class="am-compact-input am-w-sm" type="number" name="muddat_kun" min="1" max="720" value="14" title="Bir martalik muddat" required>
+                    <select class="am-compact-input" name="muddat_birlik" title="Muddat birligi">
+                      <option value="kun">Kun</option>
+                      <option value="soat">Soat</option>
+                    </select>
+                    <button class="btn-sm btn-green" type="submit" name="action" value="tasdiqlash">Tasdiqlash</button>
                     <button class="btn-sm btn-red" type="submit" name="action" value="rad_etish" data-confirm="Mentorni rad etasizmi?">Rad etish</button>
                   </form>
                 {{else if is_active}}
@@ -216,3 +243,5 @@
     <p class="empty">Hali mentor arizalari yo'q. Mentorlar <span class="mono">/amaliyot/mentor/royxat</span> orqali Google akkaunt bilan ro'yxatdan o'tadilar.</p>
   {{/if}}
 </div>
+
+<script src="/p/amaliyot/app.js"></script>
