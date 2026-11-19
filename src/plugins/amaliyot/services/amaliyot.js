@@ -95,22 +95,25 @@ async function getRecentNotifications(userId, limit = 5) {
 
 async function getStudentDashboard(studentId, selectedId = null, req = null) {
   await freezeExpiredMentors(db, req);
-  const { rows: biriktirishlar } = await db.query(
-    `SELECT b.*,
-            t.nomi AS tur_nomi, t.kod AS tur_kod, t.bolimlar_json, t.kunlik_min_soat,
-            k.nomi AS korxona_nomi, k.manzil AS korxona_manzil,
-            trim(concat_ws(' ', us.familiya, us.ism, us.ochestva)) AS ustoz_fio,
-            trim(concat_ws(' ', mn.familiya, mn.ism, mn.ochestva)) AS mentor_fio,
-            mn.lavozim AS mentor_lavozim, mn.holat AS mentor_akkaunt_holat
-       FROM amaliyot_biriktirishlar b
-       JOIN amaliyot_turlar t ON t.id = b.tur_id
-       JOIN amaliyot_korxonalar k ON k.id = b.korxona_id
-       JOIN users us ON us.id = b.ustoz_id
-       LEFT JOIN amaliyot_mentorlar mn ON mn.id = b.mentor_id
-      WHERE b.student_id = $1
-      ORDER BY (b.holat = 'faol') DESC, b.boshlanish_sana DESC, b.id DESC`,
-    [studentId],
-  );
+  const [{ rows: biriktirishlar }, notifications] = await Promise.all([
+    db.query(
+      `SELECT b.*,
+              t.nomi AS tur_nomi, t.kod AS tur_kod, t.bolimlar_json, t.kunlik_min_soat,
+              k.nomi AS korxona_nomi, k.manzil AS korxona_manzil,
+              trim(concat_ws(' ', us.familiya, us.ism, us.ochestva)) AS ustoz_fio,
+              trim(concat_ws(' ', mn.familiya, mn.ism, mn.ochestva)) AS mentor_fio,
+              mn.lavozim AS mentor_lavozim, mn.holat AS mentor_akkaunt_holat
+         FROM amaliyot_biriktirishlar b
+         JOIN amaliyot_turlar t ON t.id = b.tur_id
+         JOIN amaliyot_korxonalar k ON k.id = b.korxona_id
+         JOIN users us ON us.id = b.ustoz_id
+         LEFT JOIN amaliyot_mentorlar mn ON mn.id = b.mentor_id
+        WHERE b.student_id = $1
+        ORDER BY (b.holat = 'faol') DESC, b.boshlanish_sana DESC, b.id DESC`,
+      [studentId],
+    ),
+    getRecentNotifications(studentId, 4),
+  ]);
 
   const active = (selectedId && biriktirishlar.find((x) => x.id === Number(selectedId)))
     || biriktirishlar.find((x) => x.holat === 'faol')
@@ -119,16 +122,13 @@ async function getStudentDashboard(studentId, selectedId = null, req = null) {
   let kundaliklar = [];
   let xulosa = null;
   if (active) {
-    kundaliklar = (await db.query(
-      `SELECT * FROM amaliyot_kundalik WHERE biriktirish_id = $1 ORDER BY sana DESC, id DESC`,
-      [active.id],
-    )).rows;
-    xulosa = (await db.query(
-      'SELECT * FROM amaliyot_xulosalar WHERE biriktirish_id = $1',
-      [active.id],
-    )).rows[0] || null;
+    const [{ rows: kRows }, { rows: xRows }] = await Promise.all([
+      db.query('SELECT * FROM amaliyot_kundalik WHERE biriktirish_id = $1 ORDER BY sana DESC, id DESC', [active.id]),
+      db.query('SELECT * FROM amaliyot_xulosalar WHERE biriktirish_id = $1', [active.id]),
+    ]);
+    kundaliklar = kRows;
+    xulosa = xRows[0] || null;
   }
-  const notifications = await getRecentNotifications(studentId, 4);
   return { biriktirishlar, active, kundaliklar, xulosa, notifications };
 }
 
@@ -595,6 +595,50 @@ async function registerMentor(data, req) {
   });
 }
 
+function computeExpiryIntervalSql(muddatVal, birlik = 'kun') {
+  const val = Number(muddatVal || 14);
+  if (birlik === 'daqiqa') {
+    if (!Number.isInteger(val) || val < 1 || val > 1440) {
+      throw new AppError('Bir martalik amal qilish muddati 1 dan 1440 daqiqagacha bo\'lishi kerak', 400);
+    }
+    return { val, storedDays: 1, intervalSql: 'now() + make_interval(mins => $2)', unit: 'daqiqa' };
+  }
+  if (birlik === 'soat') {
+    if (!Number.isInteger(val) || val < 1 || val > 720) {
+      throw new AppError('Bir martalik amal qilish muddati 1 dan 720 soatgacha bo\'lishi kerak', 400);
+    }
+    return { val, storedDays: Math.max(1, Math.ceil(val / 24)), intervalSql: 'now() + make_interval(hours => $2)', unit: 'soat' };
+  }
+  if (!Number.isInteger(val) || val < 1 || val > 365) {
+    throw new AppError('Bir martalik amal qilish muddati 1 dan 365 kungacha bo\'lishi kerak', 400);
+  }
+  return { val, storedDays: val, intervalSql: 'now() + make_interval(days => $2)', unit: 'kun' };
+}
+
+async function resolveOrCreateMentorKorxona(client, m, selectedKorxonaId, actorId) {
+  let korxonaId = selectedKorxonaId || m.korxona_id;
+  if (korxonaId) {
+    const { rows: [k] } = await client.query('SELECT id FROM amaliyot_korxonalar WHERE id = $1', [korxonaId]);
+    if (!k) korxonaId = null;
+  }
+  if (!korxonaId && m.korxona_nomi_kiritilgan) {
+    const { rows: [found] } = await client.query(
+      'SELECT id FROM amaliyot_korxonalar WHERE lower(nomi) = lower($1)',
+      [m.korxona_nomi_kiritilgan.trim()],
+    );
+    if (found) {
+      korxonaId = found.id;
+    } else {
+      const { rows: [newK] } = await client.query(
+        'INSERT INTO amaliyot_korxonalar (nomi, yaratgan_id) VALUES ($1, $2) RETURNING id',
+        [m.korxona_nomi_kiritilgan.trim(), actorId],
+      );
+      korxonaId = newK.id;
+    }
+  }
+  return korxonaId;
+}
+
 async function reviewMentorByUstoz({ mentorId, action, muddatKun, muddatBirlik = 'kun', korxonaId: selectedKorxonaId = null, radSababi }, actor, req) {
   return db.tx(async (client) => {
     const { rows: [m] } = await client.query('SELECT * FROM amaliyot_mentorlar WHERE id = $1 FOR UPDATE', [mentorId]);
@@ -607,38 +651,8 @@ async function reviewMentorByUstoz({ mentorId, action, muddatKun, muddatBirlik =
       if (m.holat !== 'kutilmoqda') {
         throw new AppError('Faqat tasdiqlash kutilayotgan mentor arizasini bir martalik faollashtirish mumkin', 400);
       }
-      const val = Number(muddatKun);
-      const isHours = muddatBirlik === 'soat';
-      if (!Number.isInteger(val) || val < 1 || val > (isHours ? 720 : 365)) {
-        throw new AppError(
-          isHours
-            ? 'Bir martalik amal qilish muddati 1 dan 720 soatgacha bo\'lishi kerak'
-            : 'Bir martalik amal qilish muddati 1 dan 365 kungacha bo\'lishi kerak',
-          400,
-        );
-      }
-      let korxonaId = selectedKorxonaId || m.korxona_id;
-      if (korxonaId) {
-        const { rows: [k] } = await client.query('SELECT id FROM amaliyot_korxonalar WHERE id = $1', [korxonaId]);
-        if (!k) korxonaId = null;
-      }
-      if (!korxonaId && m.korxona_nomi_kiritilgan) {
-        const { rows: [found] } = await client.query(
-          'SELECT id FROM amaliyot_korxonalar WHERE lower(nomi) = lower($1)',
-          [m.korxona_nomi_kiritilgan.trim()],
-        );
-        if (found) {
-          korxonaId = found.id;
-        } else {
-          const { rows: [newK] } = await client.query(
-            'INSERT INTO amaliyot_korxonalar (nomi, yaratgan_id) VALUES ($1, $2) RETURNING id',
-            [m.korxona_nomi_kiritilgan.trim(), actor.id],
-          );
-          korxonaId = newK.id;
-        }
-      }
-      const storedDays = isHours ? Math.max(1, Math.ceil(val / 24)) : val;
-      const intervalSql = isHours ? 'now() + make_interval(hours => $2)' : 'now() + make_interval(days => $2)';
+      const { val, storedDays, intervalSql, unit } = computeExpiryIntervalSql(muddatKun, muddatBirlik);
+      const korxonaId = await resolveOrCreateMentorKorxona(client, m, selectedKorxonaId, actor.id);
       const { rows: [updated] } = await client.query(
         `UPDATE amaliyot_mentorlar
             SET holat = 'tasdiqlandi',
@@ -660,7 +674,32 @@ async function reviewMentorByUstoz({ mentorId, action, muddatKun, muddatBirlik =
         obyekt: 'amaliyot_mentorlar',
         obyektId: m.id,
         eski: { holat: m.holat },
-        yangi: { holat: 'tasdiqlandi', muddat: val, birlik: isHours ? 'soat' : 'kun' },
+        yangi: { holat: 'tasdiqlandi', muddat: val, birlik: unit },
+      });
+      return updated;
+    }
+
+    if (action === 'muddat_yangilash') {
+      if (m.holat !== 'tasdiqlandi') {
+        throw new AppError('Faqat faol tasdiqlangan mentor muddatini o\'zgartirish mumkin', 400);
+      }
+      const { val, storedDays, intervalSql, unit } = computeExpiryIntervalSql(muddatKun, muddatBirlik);
+      const { rows: [updated] } = await client.query(
+        `UPDATE amaliyot_mentorlar
+            SET bir_martalik_muddat_kun = $1,
+                amal_qilish_gacha = ${intervalSql},
+                updated_at = now()
+          WHERE id = $3 RETURNING *`,
+        [storedDays, val, m.id],
+      );
+      await audit({
+        client,
+        req,
+        amal: 'amaliyot.mentor_duration_update',
+        obyekt: 'amaliyot_mentorlar',
+        obyektId: m.id,
+        eski: { amal_qilish_gacha: m.amal_qilish_gacha },
+        yangi: { muddat: val, birlik: unit },
       });
       return updated;
     }
@@ -688,6 +727,46 @@ async function reviewMentorByUstoz({ mentorId, action, muddatKun, muddatBirlik =
     }
 
     throw new AppError('Noto\'g\'ri amal', 400);
+  });
+}
+
+async function approveAllPendingMentorsByUstoz({ muddatKun = 14, muddatBirlik = 'kun' }, actor, req) {
+  const { val, storedDays, intervalSql, unit } = computeExpiryIntervalSql(muddatKun, muddatBirlik);
+  return db.tx(async (client) => {
+    const isTeacher = actor.role === 'teacher';
+    const { rows: pending } = await client.query(
+      `SELECT * FROM amaliyot_mentorlar
+        WHERE holat = 'kutilmoqda' AND ($1::boolean OR ustoz_id = $2)
+        FOR UPDATE`,
+      [!isTeacher, actor.id],
+    );
+    for (const m of pending) {
+      const korxonaId = await resolveOrCreateMentorKorxona(client, m, null, actor.id);
+      await client.query(
+        `UPDATE amaliyot_mentorlar
+            SET holat = 'tasdiqlandi',
+                korxona_id = COALESCE($1, korxona_id),
+                bir_martalik_muddat_kun = $3,
+                amal_qilish_gacha = ${intervalSql},
+                tasdiqlagan_id = $4,
+                tasdiqlangan_vaqt = now(),
+                muzlatilgan_vaqt = NULL,
+                rad_sababi = NULL,
+                updated_at = now()
+          WHERE id = $5`,
+        [korxonaId, val, storedDays, actor.id, m.id],
+      );
+    }
+    if (pending.length) {
+      await audit({
+        client,
+        req,
+        amal: 'amaliyot.mentor_approve_all',
+        obyekt: 'amaliyot_mentorlar',
+        yangi: { soni: pending.length, muddat: val, birlik: unit },
+      });
+    }
+    return pending.length;
   });
 }
 
@@ -869,6 +948,7 @@ module.exports = {
   reviewXulosaByUstoz,
   registerMentor,
   reviewMentorByUstoz,
+  approveAllPendingMentorsByUstoz,
   authenticateMentorByGoogle,
   getMentorDashboard,
   reviewKundalikByMentor,

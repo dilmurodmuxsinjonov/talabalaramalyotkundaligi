@@ -408,3 +408,54 @@ test('Regressiya: mentor va kundalik tasdiqlash formasi action/holat yuborilmaga
   const { rows: [kUpdated] } = await pool.query('SELECT ustoz_holat FROM amaliyot_kundalik WHERE id = $1', [k2.id]);
   assert.equal(kUpdated.ustoz_holat, 'tasdiqlandi');
 });
+
+test('Tezkor mentor tasdiqlash: daqiqa muddati, muddatni yangilash, 1-bosishda barchasini tasdiqlash va htmx auto-kirish', async () => {
+  const dekanId = await userId('dekan_at');
+  const mAgent = request.agent(app);
+  const regP = await mAgent.get('/amaliyot/mentor/royxat');
+  await mAgent.post('/amaliyot/mentor/royxat').type('form').send({
+    _csrf: csrfOf(regP.text),
+    email: 'tezkor.mentor@gmail.com',
+    familiya: 'Alimov',
+    ism: 'Sardor',
+    lavozim: 'Team Lead',
+    korxona_nomi: 'Fast AI Lab',
+    ustoz_id: String(dekanId),
+  });
+
+  // Ro'yxatdan o'tgach kirish sahifasida htmx polling holati chiqadi
+  const waitPage = await mAgent.get('/amaliyot/mentor/kirish');
+  assert.equal(waitPage.status, 200);
+  assert.match(waitPage.text, /am-mentor-poll/);
+  const pollPending = await mAgent.get('/amaliyot/mentor/holat-tekshirish').set('HX-Request', 'true');
+  assert.equal(pollPending.status, 200);
+  assert.match(pollPending.text, /Ustoz tasdig'i kutilmoqda/);
+
+  // 1-bosishda barchasini 5 daqiqalik muddat bilan tasdiqlash
+  const dekan = await login(app, 'dekan_at');
+  const batchRes = await dekan.form('/amaliyot/mentor/tasdiqlash-hammasi', {
+    muddat_kun: '5',
+    muddat_birlik: 'daqiqa',
+  });
+  assert.equal(batchRes.status, 302);
+
+  const { rows: [mRow] } = await pool.query("SELECT id, holat, amal_qilish_gacha FROM amaliyot_mentorlar WHERE email = 'tezkor.mentor@gmail.com'");
+  assert.equal(mRow.holat, 'tasdiqlandi');
+  assert.ok(new Date(mRow.amal_qilish_gacha).getTime() - Date.now() <= 6 * 60_000);
+
+  // Ustoz tasdiqlashi bilan htmx polling HX-Redirect qaytaradi va mentor sessiyasi avtomatik ochiladi
+  const pollOk = await mAgent.get('/amaliyot/mentor/holat-tekshirish').set('HX-Request', 'true');
+  assert.equal(pollOk.status, 200);
+  assert.equal(pollOk.headers['hx-redirect'], '/amaliyot/mentor');
+  assert.equal((await mAgent.get('/amaliyot/mentor')).status, 200);
+
+  // Faol mentor muddatini daqiqa/soatga qisqartirib yangilash
+  const updRes = await dekan.form(`/amaliyot/mentor/${mRow.id}/tasdiqlash`, {
+    action: 'muddat_yangilash',
+    muddat_kun: '2',
+    muddat_birlik: 'daqiqa',
+  });
+  assert.equal(updRes.status, 302);
+  const { rows: [mUpd] } = await pool.query('SELECT amal_qilish_gacha FROM amaliyot_mentorlar WHERE id = $1', [mRow.id]);
+  assert.ok(new Date(mUpd.amal_qilish_gacha).getTime() - Date.now() <= 3 * 60_000);
+});

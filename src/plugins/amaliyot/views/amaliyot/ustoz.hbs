@@ -12,7 +12,19 @@
 
 {{#if pendingMentorsCount}}
   <div class="alert warn" role="status">
-    Tasdiqlash kutilayotgan <b>{{pendingMentorsCount}} ta</b> korxona mentori arizasi bor. Quyidagi jadvalda bir martalik amal qilish muddatini belgilab tasdiqlang.
+    <div class="spread">
+      <span>Tasdiqlash kutilayotgan <b>{{pendingMentorsCount}} ta</b> korxona mentori arizasi bor.</span>
+      <form class="am-inline-form" method="post" action="/amaliyot/mentor/tasdiqlash-hammasi">
+        {{> csrf}}
+        <input class="am-compact-input am-w-sm" type="number" name="muddat_kun" min="1" max="1440" value="14" required>
+        <select class="am-compact-input" name="muddat_birlik">
+          <option value="kun">Kun</option>
+          <option value="soat">Soat</option>
+          <option value="daqiqa">Daqiqa</option>
+        </select>
+        <button class="btn-sm btn-green" type="submit">Barchasini 1 bosishda tasdiqlash</button>
+      </form>
+    </div>
   </div>
 {{/if}}
 
@@ -217,20 +229,34 @@
                         {{/each}}
                       </select>
                     {{/unless}}
-                    <input class="am-compact-input am-w-sm" type="number" name="muddat_kun" min="1" max="720" value="14" title="Bir martalik muddat" required>
+                    <input class="am-compact-input am-w-sm" type="number" name="muddat_kun" min="1" max="1440" value="14" title="Bir martalik muddat" required>
                     <select class="am-compact-input" name="muddat_birlik" title="Muddat birligi">
                       <option value="kun">Kun</option>
                       <option value="soat">Soat</option>
+                      <option value="daqiqa">Daqiqa</option>
                     </select>
                     <button class="btn-sm btn-green" type="submit" name="action" value="tasdiqlash">Tasdiqlash</button>
                     <button class="btn-sm btn-red" type="submit" name="action" value="rad_etish" data-confirm="Mentorni rad etasizmi?">Rad etish</button>
                   </form>
                 {{else if is_active}}
-                  <form class="am-inline-form" method="post" action="/amaliyot/mentor/{{id}}/tasdiqlash" data-confirm="Mentor akkauntini hoziroq muzlatasizmi?">
-                    {{> csrf}}
-                    <input type="hidden" name="action" value="muzlatish">
-                    <button class="btn-sm btn-red" type="submit">Muzlatish</button>
-                  </form>
+                  <div class="am-inline-form">
+                    <form class="am-inline-form" method="post" action="/amaliyot/mentor/{{id}}/tasdiqlash">
+                      {{> csrf}}
+                      <input type="hidden" name="action" value="muddat_yangilash">
+                      <input class="am-compact-input am-w-sm" type="number" name="muddat_kun" min="1" max="1440" value="5" title="Yangi muddat" required>
+                      <select class="am-compact-input" name="muddat_birlik" title="Muddat birligi">
+                        <option value="daqiqa">Daqiqa</option>
+                        <option value="soat">Soat</option>
+                        <option value="kun">Kun</option>
+                      </select>
+                      <button class="btn-sm btn-blue" type="submit">Muddatni yangilash</button>
+                    </form>
+                    <form class="am-inline-form" method="post" action="/amaliyot/mentor/{{id}}/tasdiqlash" data-confirm="Mentor akkauntini hoziroq muzlatasizmi?">
+                      {{> csrf}}
+                      <input type="hidden" name="action" value="muzlatish">
+                      <button class="btn-sm btn-red" type="submit">Muzlatish</button>
+                    </form>
+                  </div>
                 {{else}}
                   <span class="muted">Yakunlangan</span>
                 {{/if}}

@@ -220,12 +220,22 @@ const mentorAuthLimiter = rateLimit({
 const publicRouter = express.Router();
 publicRouter.use('/amaliyot/mentor', loadMentor);
 
+function escHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 publicRouter.get('/amaliyot/mentor/kirish', (req, res) => {
   if (req.mentor) return res.redirect('/amaliyot/mentor');
   res.render('amaliyot/mentor-kirish', {
     layout: 'bare',
     title: 'Mentor kirishi',
     googleConfigured: isGoogleOAuthConfigured(),
+    pendingEmail: req.session.pendingMentorEmail || '',
     flash: res.locals.flash,
   });
 });
@@ -251,15 +261,18 @@ publicRouter.post('/amaliyot/mentor/kirish', mentorAuthLimiter, ah(async (req, r
     });
   }
   if (auth.status === 'pending') {
-    return res.status(403).render('amaliyot/mentor-kirish', {
+    req.session.pendingMentorEmail = email;
+    return req.session.save(() => res.status(403).render('amaliyot/mentor-kirish', {
       layout: 'bare',
       title: 'Mentor kirishi',
       googleConfigured: isGoogleOAuthConfigured(),
       email,
+      pendingEmail: email,
       error: 'Arizangiz hali biriktirilgan ustoz tomonidan tasdiqlanmagan.',
-    });
+    }));
   }
   if (auth.status === 'rejected') {
+    delete req.session.pendingMentorEmail;
     return res.status(403).render('amaliyot/mentor-kirish', {
       layout: 'bare',
       title: 'Mentor kirishi',
@@ -269,6 +282,7 @@ publicRouter.post('/amaliyot/mentor/kirish', mentorAuthLimiter, ah(async (req, r
     });
   }
   if (auth.status === 'frozen') {
+    delete req.session.pendingMentorEmail;
     return res.status(403).render('amaliyot/mentor-kirish', {
       layout: 'bare',
       title: 'Mentor kirishi',
@@ -283,6 +297,32 @@ publicRouter.post('/amaliyot/mentor/kirish', mentorAuthLimiter, ah(async (req, r
     req.session.mentorId = auth.mentor.id;
     req.session.save(() => res.redirect('/amaliyot/mentor'));
   });
+}));
+
+publicRouter.get('/amaliyot/mentor/holat-tekshirish', ah(async (req, res) => {
+  const email = String(req.query.email || req.session?.pendingMentorEmail || '').trim().toLowerCase();
+  if (!email) return res.status(204).end();
+
+  const auth = await svc.authenticateMentorByGoogle({ email }, req);
+  if (auth.status === 'ok') {
+    return req.session.regenerate((err) => {
+      if (err) return res.status(500).end();
+      req.session.mentorId = auth.mentor.id;
+      req.session.save(() => {
+        if (req.headers['hx-request']) {
+          return res.set('HX-Redirect', '/amaliyot/mentor').status(200).send('Tasdiqlandi! Yo\'naltirilmoqda...');
+        }
+        res.redirect('/amaliyot/mentor');
+      });
+    });
+  }
+  if (auth.status === 'pending') {
+    return res.send(
+      `<div class="alert info" role="status">Ustoz tasdig'i kutilmoqda (${escHtml(email)})... Tasdiqlanishi bilan sahifa avtomatik ochiladi.</div>`,
+    );
+  }
+  delete req.session.pendingMentorEmail;
+  res.send('<div class="alert err" role="alert">Ariza rad etilgan yoki muddati tugab muzlatilgan.</div>');
 }));
 
 publicRouter.get('/amaliyot/mentor/google', (req, res) => {
@@ -359,8 +399,9 @@ publicRouter.post('/amaliyot/mentor/royxat', ah(async (req, res) => {
     googleSub: draft.email === d.email.toLowerCase() ? draft.sub : null,
   }, req);
   delete req.session.amaliyotGoogleDraft;
+  req.session.pendingMentorEmail = d.email.toLowerCase();
   flash(req, 'ok', 'Ro\'yxatdan o\'tish arizangiz biriktirilgan ustozga yuborildi. Ustoz tasdiqlab muddat belgilagach kirishingiz mumkin.');
-  res.redirect('/amaliyot/mentor/kirish');
+  req.session.save(() => res.redirect('/amaliyot/mentor/kirish'));
 }));
 
 publicRouter.post('/amaliyot/mentor/chiqish', (req, res) => {
@@ -732,12 +773,25 @@ router.post('/amaliyot/xulosa/:id/ustoz-holat', requireRole('teacher', 'dekanat'
   res.redirect(`/amaliyot/ustoz/talaba/${biriktirishId}`);
 }));
 
+router.post('/amaliyot/mentor/tasdiqlash-hammasi', requireRole('teacher', 'dekanat', 'admin'), ah(async (req, res) => {
+  const d = parseZod(z.object({
+    muddat_kun: z.union([z.literal(''), z.coerce.number().int().min(1).max(1440)]).optional(),
+    muddat_birlik: z.enum(['daqiqa', 'soat', 'kun']).optional().default('kun'),
+  }), req.body);
+  const count = await svc.approveAllPendingMentorsByUstoz({
+    muddatKun: d.muddat_kun || 14,
+    muddatBirlik: d.muddat_birlik,
+  }, req.user, req);
+  flash(req, 'ok', `${count} ta mentor arizasi 1 bosishda tasdiqlandi`);
+  res.redirect('/amaliyot/ustoz');
+}));
+
 router.post('/amaliyot/mentor/:id/tasdiqlash', requireRole('teacher', 'dekanat', 'admin'), ah(async (req, res) => {
   const id = idParam(req.params.id);
   const d = parseZod(z.object({
-    action: z.enum(['tasdiqlash', 'rad_etish', 'muzlatish']).optional().default('tasdiqlash'),
-    muddat_kun: z.union([z.literal(''), z.coerce.number().int().min(1).max(720)]).optional(),
-    muddat_birlik: z.enum(['kun', 'soat']).optional().default('kun'),
+    action: z.enum(['tasdiqlash', 'muddat_yangilash', 'rad_etish', 'muzlatish']).optional().default('tasdiqlash'),
+    muddat_kun: z.union([z.literal(''), z.coerce.number().int().min(1).max(1440)]).optional(),
+    muddat_birlik: z.enum(['daqiqa', 'soat', 'kun']).optional().default('kun'),
     korxona_id: z.union([z.literal(''), z.coerce.number().int().positive()]).optional(),
     rad_sababi: z.string().trim().max(500).optional().default(''),
   }), req.body);

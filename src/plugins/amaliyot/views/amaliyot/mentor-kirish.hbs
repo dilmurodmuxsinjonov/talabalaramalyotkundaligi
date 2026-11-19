@@ -13,6 +13,19 @@
       <div class="alert err" role="alert">{{error}}</div>
     {{/if}}
 
+    {{#if pendingEmail}}
+      <div
+        id="am-mentor-poll"
+        hx-get="/amaliyot/mentor/holat-tekshirish"
+        hx-trigger="every 3s"
+        hx-swap="innerHTML"
+      >
+        <div class="alert info" role="status">
+          Ustoz tasdig'i kutilmoqda ({{pendingEmail}})... Ustoz "Tasdiqlash" tugmasini bosishi bilan mentor paneli avtomatik ochiladi.
+        </div>
+      </div>
+    {{/if}}
+
     {{#if googleConfigured}}
       <a class="btn btn-primary am-google-btn" href="/amaliyot/mentor/google">Google akkaunt bilan kirish</a>
       <div class="am-sep">yoki tasdiqlangan Google email bilan</div>
@@ -35,3 +48,5 @@
     </p>
   </div>
 </div>
+
+<script src="/js/htmx.min.js"></script>
