@@ -10,10 +10,12 @@ const env = require('./config/env');
 const { pool } = require('./db/pool');
 const helpers = require('./lib/hbs');
 const { loadUser, requireLogin } = require('./middleware/auth');
+const { loadPlugins } = require('./lib/plugins');
 const { notFound } = require('./lib/http');
 
 function createApp() {
   const app = express();
+  const plugins = loadPlugins();
 
   app.set('trust proxy', 1);                       // Render HTTPS proksi ortida (K-05)
   app.disable('x-powered-by');
@@ -26,7 +28,10 @@ function createApp() {
     helpers,
   }));
   app.set('view engine', 'hbs');
-  app.set('views', path.join(__dirname, 'views'));
+  app.set('views', [
+    path.join(__dirname, 'views'),
+    ...plugins.map((p) => p.viewsDir).filter(Boolean),
+  ]);
 
   // Xavfsizlik sarlavhalari + CSP (K-07): inline skript/stil yo'q
   app.use(helmet({
@@ -44,6 +49,11 @@ function createApp() {
   }));
 
   app.use(express.static(path.join(__dirname, '../public'), { maxAge: env.isProd ? '7d' : 0 }));
+  for (const p of plugins) {
+    if (p.publicDir) {
+      app.use(`/p/${p.name}`, express.static(p.publicDir, { maxAge: env.isProd ? '7d' : 0 }));
+    }
+  }
 
   // Ochiq marshrutlar (sessiyasiz)
   app.get('/healthz', async (req, res) => {
@@ -89,6 +99,9 @@ function createApp() {
   });
 
   app.use(require('./modules/auth/routes'));
+  for (const p of plugins) {
+    if (p.publicRouter) app.use(p.publicRouter);
+  }
 
   // Shu yerdan pastda — faqat kirgan foydalanuvchilar
   app.use(requireLogin);
@@ -101,6 +114,9 @@ function createApp() {
       student: r === 'student',
       tyutor: r === 'tyutor',
     };
+    res.locals.pluginNav = plugins.flatMap((p) =>
+      p.nav.filter((item) => !item.roles || item.roles.includes(r)),
+    );
     next();
   });
 
@@ -114,6 +130,9 @@ function createApp() {
   app.use(require('./modules/navbat/routes'));
   app.use(require('./modules/tyutor/routes'));
   app.use(require('./modules/admin/routes'));
+  for (const p of plugins) {
+    if (p.router) app.use(p.router);
+  }
 
   app.use((req, res, next) => next(notFound('Sahifa topilmadi')));
 

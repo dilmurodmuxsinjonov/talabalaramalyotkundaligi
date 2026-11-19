@@ -1,0 +1,95 @@
+<link rel="stylesheet" href="/p/amaliyot/style.css">
+
+<div class="head">
+  <div>
+    <h1>Korxona mentori paneli</h1>
+    <p class="muted mb0">{{mentorInfo.familiya}} {{mentorInfo.ism}} — {{mentorInfo.korxona_nomi}} ({{mentorInfo.lavozim}})</p>
+  </div>
+  <div class="actions">
+    <span class="badge {{mentorInfo.holat_badge.cls}}">Amal qilish muddati: {{mentorInfo.amal_qilish_fmt}}</span>
+  </div>
+</div>
+
+<div class="alert info" role="status">
+  Ushbu mentor akkaunti bir martalik muddatga ochilgan (<b>{{mentorInfo.amal_qilish_fmt}}</b> gacha). Muddat tugagach akkaunt avtomatik muzlatiladi.
+</div>
+
+{{#unless biriktirishlar.length}}
+  <div class="card">
+    <h2>Sizga biriktirilgan talabalar hozircha yo'q</h2>
+    <p class="muted mb0">Biriktirilgan ustozingiz ({{mentorInfo.ustoz_fio}}) talabalarni sizga biriktirgach ularning kundaliklari shu yerda ko'rinadi.</p>
+  </div>
+{{else}}
+  {{#each biriktirishlar}}
+    <div class="card">
+      <div class="head">
+        <div>
+          <h2>{{student_fio}} {{#if guruh}}({{guruh}}){{/if}}</h2>
+          <p class="muted mb0">{{tur_nomi}} | Muddat: {{boshlanish_fmt}} — {{tugash_fmt}} | Ustoz: {{ustoz_fio}}</p>
+        </div>
+        <div class="actions">
+          <a class="btn btn-sm" href="/amaliyot/mentor/biriktirish/{{id}}/docx">Kundalik (.docx)</a>
+          <a class="btn btn-sm" href="/amaliyot/mentor/biriktirish/{{id}}/xulosa-docx">Xulosalar (.docx)</a>
+        </div>
+      </div>
+
+      <h3>Har kunlik kundalik yozuvlari ({{kundaliklar.length}} ta)</h3>
+      {{#if kundaliklar.length}}
+        <div class="table-wrap">
+          <table class="stack">
+            <thead>
+              <tr>
+                <th>Sana</th>
+                <th>Bajarilgan ish</th>
+                <th>Soat</th>
+                <th>Holat</th>
+                <th>Tasdiqlash va qo'shimcha fikr (ixtiyoriy)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#each kundaliklar}}
+                <tr>
+                  <td data-l="Sana" class="mono">{{sana_fmt}}</td>
+                  <td data-l="Ish mazmuni">
+                    {{ish_mazmuni}}
+                    {{#if natija}}<div><small class="muted">Natija: {{natija}}</small></div>{{/if}}
+                  </td>
+                  <td data-l="Soat" class="mono">{{soat}}</td>
+                  <td data-l="Holat">
+                    <span class="badge {{mentor_badge.cls}}">{{mentor_badge.label}}</span>
+                  </td>
+                  <td data-l="Tasdiqlash" class="actions">
+                    <form class="am-inline-form" method="post" action="/amaliyot/mentor/kundalik/{{id}}/holat" data-once>
+                      {{> csrf}}
+                      <input class="am-compact-input am-w-md" type="text" name="fikr" value="{{mentor_fikr}}" placeholder="Qo'shimcha fikr (ixtiyoriy)">
+                      <button class="btn-sm btn-green" type="submit" name="holat" value="tasdiqlandi">Tasdiqlash</button>
+                      <button class="btn-sm btn-red" type="submit" name="holat" value="qaytarildi">Qaytarish</button>
+                    </form>
+                  </td>
+                </tr>
+              {{/each}}
+            </tbody>
+          </table>
+        </div>
+      {{else}}
+        <p class="empty">Talaba hali kunlik yozuv kiritmagan.</p>
+      {{/if}}
+
+      {{#if xulosa_id}}
+        <hr class="am-divider">
+        <h3>Xulosalar kitobchasi <span class="badge {{xulosa_badge.cls}}">{{xulosa_badge.label}}</span></h3>
+        <dl class="kv">
+          <dt>Bajarilgan ishlar xulosasi</dt><dd>{{#if bajarilgan_ishlar_xulosasi}}{{bajarilgan_ishlar_xulosasi}}{{else}}—{{/if}}</dd>
+          <dt>Ko'nikmalar</dt><dd>{{#if ozlashtirilgan_konikmalar}}{{ozlashtirilgan_konikmalar}}{{else}}—{{/if}}</dd>
+          <dt>Yakuniy xulosa</dt><dd>{{#if yakuniy_xulosa}}{{yakuniy_xulosa}}{{else}}—{{/if}}</dd>
+        </dl>
+        <form class="am-inline-form mt" method="post" action="/amaliyot/mentor/xulosa/{{xulosa_id}}/holat" data-once>
+          {{> csrf}}
+          <input class="am-w-md" type="text" name="fikr" value="{{xulosa_mentor_fikr}}" placeholder="Xulosa bo'yicha qo'shimcha fikr (ixtiyoriy)">
+          <button class="btn-sm btn-green" type="submit" name="holat" value="tasdiqlandi">Xulosani tasdiqlash</button>
+          <button class="btn-sm btn-red" type="submit" name="holat" value="qaytarildi">Qaytarish</button>
+        </form>
+      {{/if}}
+    </div>
+  {{/each}}
+{{/unless}}

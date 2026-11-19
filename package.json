@@ -8,8 +8,9 @@
     "dev": "node --watch src/server.js",
     "migrate": "node src/db/migrate.js",
     "seed": "node src/db/seed.js",
-    "test": "node --test --test-concurrency=1 \"tests/*.test.js\"",
-    "lint": "eslint ."
+    "test": "node --test --test-concurrency=1 \"tests/*.test.js\" \"src/plugins/*/tests/*.test.js\"",
+    "lint": "eslint .",
+    "plugins:check": "node scripts/plugins-check.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -1,0 +1,73 @@
+<link rel="stylesheet" href="/p/amaliyot/style.css">
+
+<div class="head">
+  <div>
+    <h1>Xulosalar kitobchasi</h1>
+    <p class="muted mb0">{{biriktirish.student_fio}} — {{biriktirish.tur_nomi}} ({{biriktirish.korxona_nomi}})</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/amaliyot">← Kundalikka qaytish</a>
+    <a class="btn btn-primary" href="/amaliyot/{{biriktirish.id}}/xulosa-docx">Xulosalar kitobchasini yuklab olish (.docx)</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="spread">
+    <div>
+      <b>Holat:</b>
+      <span class="badge {{xulosa.talaba_badge.cls}}">{{xulosa.talaba_badge.label}}</span>
+      <span class="muted">Ustoz:</span> <span class="badge {{xulosa.ustoz_badge.cls}}">{{xulosa.ustoz_badge.label}}</span>
+      <span class="muted">Mentor:</span> <span class="badge {{xulosa.mentor_badge.cls}}">{{xulosa.mentor_badge.label}}</span>
+    </div>
+    {{#if xulosa.ustoz_baho}}
+      <div><b>Yakuniy baho:</b> <span class="mono">{{xulosa.ustoz_baho}} / 100</span></div>
+    {{/if}}
+  </div>
+
+  {{#if xulosa.ustoz_izoh}}
+    <div class="am-note mt"><b>Ustoz izohi:</b> {{xulosa.ustoz_izoh}}</div>
+  {{/if}}
+  {{#if xulosa.mentor_fikr}}
+    <div class="am-note mt"><b>Mentor fikri:</b> {{xulosa.mentor_fikr}}</div>
+  {{/if}}
+</div>
+
+<form class="card" method="post" action="/amaliyot/xulosa" data-once>
+  {{> csrf}}
+  <input type="hidden" name="biriktirish_id" value="{{biriktirish.id}}">
+
+  {{#if bolimlar.length}}
+    <h2>1. Amaliyot turi bo'yicha standart bo'limlar</h2>
+    {{#each bolimlar}}
+      <div class="field">
+        <label for="bolim_{{key}}">{{title}}</label>
+        {{#if hint}}<small class="muted">{{hint}}</small>{{/if}}
+        <textarea id="bolim_{{key}}" name="bolim_{{key}}" rows="3">{{value}}</textarea>
+      </div>
+    {{/each}}
+    <hr class="am-divider">
+  {{/if}}
+
+  <h2>2. Yakuniy xulosalar</h2>
+  <div class="field">
+    <label for="bajarilgan_ishlar_xulosasi">Bajarilgan ishlarning umumiy xulosasi</label>
+    <textarea id="bajarilgan_ishlar_xulosasi" name="bajarilgan_ishlar_xulosasi" rows="4">{{xulosa.bajarilgan_ishlar_xulosasi}}</textarea>
+  </div>
+  <div class="field">
+    <label for="ozlashtirilgan_konikmalar">O'zlashtirilgan amaliy ko'nikmalar va texnologiyalar</label>
+    <textarea id="ozlashtirilgan_konikmalar" name="ozlashtirilgan_konikmalar" rows="3">{{xulosa.ozlashtirilgan_konikmalar}}</textarea>
+  </div>
+  <div class="field">
+    <label for="muammo_va_takliflar">Aniqlangan muammolar va takliflar</label>
+    <textarea id="muammo_va_takliflar" name="muammo_va_takliflar" rows="3">{{xulosa.muammo_va_takliflar}}</textarea>
+  </div>
+  <div class="field">
+    <label for="yakuniy_xulosa">Yakuniy xulosa</label>
+    <textarea id="yakuniy_xulosa" name="yakuniy_xulosa" rows="3">{{xulosa.yakuniy_xulosa}}</textarea>
+  </div>
+
+  <div class="actions">
+    <button class="btn" type="submit" name="harakat" value="qoralama">Qoralama sifatida saqlash</button>
+    <button class="btn btn-primary" type="submit" name="harakat" value="topshirish">Tasdiqlash uchun topshirish</button>
+  </div>
+</form>

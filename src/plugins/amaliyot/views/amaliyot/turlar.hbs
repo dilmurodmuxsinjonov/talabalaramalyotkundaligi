@@ -1,0 +1,82 @@
+<link rel="stylesheet" href="/p/amaliyot/style.css">
+
+<div class="head">
+  <div>
+    <h1>Amaliyot kundaligi turlari</h1>
+    <p class="muted mb0">Kundalik turlari va ularning standart Word shabloni bo'limlarini boshqarish</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/amaliyot/ustoz">← Amaliyot nazorati</a>
+  </div>
+</div>
+
+<div class="grid two">
+  <div class="card">
+    <h2>Mavjud turlar ({{turlar.length}} ta)</h2>
+    <div class="table-wrap">
+      <table class="stack">
+        <thead>
+          <tr>
+            <th>Kod / Nomi</th>
+            <th>Min soat</th>
+            <th>Bo'limlar</th>
+            <th>Holat</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each turlar}}
+            <tr>
+              <td data-l="Nomi">
+                <b>{{nomi}}</b>
+                <div><small class="mono muted">{{kod}}</small></div>
+                {{#if tavsif}}<div><small class="muted">{{tavsif}}</small></div>{{/if}}
+              </td>
+              <td data-l="Soat" class="mono">{{kunlik_min_soat}}</td>
+              <td data-l="Bo'limlar">
+                {{#each bolimlar_list}}
+                  <div><small>• {{title}}</small></div>
+                {{/each}}
+              </td>
+              <td data-l="Holat" class="actions">
+                <form method="post" action="/admin/amaliyot/turlar/{{id}}/holat" data-once>
+                  {{> csrf}}
+                  <button class="btn-sm" type="submit">{{#if faol}}Faol (o'chirish){{else}}Nofaol (yoqish){{/if}}</button>
+                </form>
+              </td>
+            </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Yangi kundalik turi qo'shish</h2>
+    <form method="post" action="/admin/amaliyot/turlar" data-once>
+      {{> csrf}}
+      <div class="row">
+        <div class="field">
+          <label for="kod">Kod (lotincha)</label>
+          <input type="text" id="kod" name="kod" required placeholder="masalan: pedagogik" pattern="[a-z0-9_]{2,40}">
+        </div>
+        <div class="field">
+          <label for="kunlik_min_soat">Kunlik standart soat</label>
+          <input type="number" id="kunlik_min_soat" name="kunlik_min_soat" step="0.5" min="1" max="24" value="6" required>
+        </div>
+      </div>
+      <div class="field">
+        <label for="nomi">Tur nomi</label>
+        <input type="text" id="nomi" name="nomi" required placeholder="Pedagogik amaliyot">
+      </div>
+      <div class="field">
+        <label for="tavsif">Tavsif</label>
+        <input type="text" id="tavsif" name="tavsif" placeholder="Qisqacha izoh">
+      </div>
+      <div class="field">
+        <label for="bolimlar_matn">Standart to'ldiriladigan bo'limlar (har qatorga bittadan: Sarlavha | Izoh)</label>
+        <textarea id="bolimlar_matn" name="bolimlar_matn" rows="5" placeholder="Dars rejasi | O'tilgan darslar konspekti&#10;Metodik tahlil | Ustoz bilan tahlil natijalari"></textarea>
+      </div>
+      <button class="btn-primary btn-block" type="submit">Kundalik turini qo'shish</button>
+    </form>
+  </div>
+</div>

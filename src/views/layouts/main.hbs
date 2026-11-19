@@ -35,10 +35,21 @@
         <a href="/admin/sozlamalar" class="{{#if (eq path '/admin/sozlamalar')}}on{{/if}}">Sozlamalar</a>
         <a href="/admin/audit" class="{{#if (eq path '/admin/audit')}}on{{/if}}">Audit</a>
       {{/if}}
+      {{#each pluginNav}}
+        <a href="{{href}}" class="{{#if (eq ../path href)}}on{{/if}}">{{label}}</a>
+      {{/each}}
+      {{#if mentor}}
+        <a href="/amaliyot/mentor" class="{{#if (eq path '/amaliyot/mentor')}}on{{/if}}">Mentor paneli</a>
+      {{/if}}
     </nav>
     <div class="who">
-      <a href="/profil" title="Profil">{{me.familiya}} {{me.ism}}</a>
-      <form method="post" action="/logout"><input type="hidden" name="_csrf" value="{{csrfToken}}"><button class="btn-sm" type="submit">Chiqish</button></form>
+      {{#if me}}
+        <a href="/profil" title="Profil">{{me.familiya}} {{me.ism}}</a>
+        <form method="post" action="/logout"><input type="hidden" name="_csrf" value="{{csrfToken}}"><button class="btn-sm" type="submit">Chiqish</button></form>
+      {{else if mentor}}
+        <span title="Korxona mentori">{{mentor.familiya}} {{mentor.ism}}</span>
+        <form method="post" action="/amaliyot/mentor/chiqish"><input type="hidden" name="_csrf" value="{{csrfToken}}"><button class="btn-sm" type="submit">Chiqish</button></form>
+      {{/if}}
     </div>
   </div>
 </header>

@@ -3,8 +3,32 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const bcrypt = require('bcryptjs');
+const { loadPlugins } = require('../lib/plugins');
 
 const DIR = path.join(__dirname, 'migrations');
+
+async function applyDir(client, dir, prefix, done, log) {
+  const files = fs.readdirSync(dir).filter((f) => /^\d{3}_.+\.sql$/.test(f)).sort();
+  for (const file of files) {
+    const version = prefix + file.replace(/\.sql$/, '');
+    if (done.has(version)) continue;
+    const sql = fs.readFileSync(path.join(dir, file), 'utf8');
+    try {
+      await client.query('BEGIN');
+      await client.query(sql);
+      await client.query('INSERT INTO schema_migrations (version) VALUES ($1)', [version]);
+      await client.query('COMMIT');
+      log(`✓ ${version}`);
+    } catch (e) {
+      await client.query('ROLLBACK');
+      const line = e.position ? sql.slice(0, Number(e.position)).split('\n').length : null;
+      throw new Error(`Migratsiya ${version} xato: ${e.message}`
+        + (line ? `\n  joyi: ${file}, ${line}-qator` : '')
+        + (e.where ? `\n  kontekst: ${e.where.split('\n')[0]}` : '')
+        + (e.detail ? `\n  tafsilot: ${e.detail}` : ''));
+    }
+  }
+}
 
 async function migrate(pool, { log = console.log } = {}) {
   const client = await pool.connect();
@@ -16,24 +40,10 @@ async function migrate(pool, { log = console.log } = {}) {
     const { rows } = await client.query('SELECT version FROM schema_migrations');
     const done = new Set(rows.map((r) => r.version));
 
-    const files = fs.readdirSync(DIR).filter((f) => /^\d{3}_.+\.sql$/.test(f)).sort();
-    for (const file of files) {
-      const version = file.replace(/\.sql$/, '');
-      if (done.has(version)) continue;
-      const sql = fs.readFileSync(path.join(DIR, file), 'utf8');
-      try {
-        await client.query('BEGIN');
-        await client.query(sql);
-        await client.query('INSERT INTO schema_migrations (version) VALUES ($1)', [version]);
-        await client.query('COMMIT');
-        log(`✓ ${version}`);
-      } catch (e) {
-        await client.query('ROLLBACK');
-        const line = e.position ? sql.slice(0, Number(e.position)).split('\n').length : null;
-        throw new Error(`Migratsiya ${version} xato: ${e.message}`
-          + (line ? `\n  joyi: ${file}, ${line}-qator` : '')
-          + (e.where ? `\n  kontekst: ${e.where.split('\n')[0]}` : '')
-          + (e.detail ? `\n  tafsilot: ${e.detail}` : ''));
+    await applyDir(client, DIR, '', done, log);
+    for (const p of loadPlugins()) {
+      if (p.migrationsDir) {
+        await applyDir(client, p.migrationsDir, `plugin:${p.name}:`, done, log);
       }
     }
     await client.query('SELECT pg_advisory_unlock(727001)');

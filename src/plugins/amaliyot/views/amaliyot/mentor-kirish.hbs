@@ -1,0 +1,37 @@
+<link rel="stylesheet" href="/p/amaliyot/style.css">
+
+<div class="auth">
+  <div class="card">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">AK</span>Amaliyot kundaligi</div>
+    <h1 class="center auth-title">Korxona mentori kirishi</h1>
+    <p class="muted center">Mentorlar Google akkaunt bilan kiradi. Akkaunt faqat ustoz tasdiqlagan bir martalik muddat davomida faol bo'ladi.</p>
+
+    {{#if flash}}
+      <div class="alert {{flash.type}}" role="alert">{{flash.text}}</div>
+    {{/if}}
+    {{#if error}}
+      <div class="alert err" role="alert">{{error}}</div>
+    {{/if}}
+
+    {{#if googleConfigured}}
+      <a class="btn btn-primary am-google-btn" href="/amaliyot/mentor/google">Google akkaunt bilan kirish</a>
+      <div class="am-sep">yoki tasdiqlangan Google email bilan</div>
+    {{/if}}
+
+    <form method="post" action="/amaliyot/mentor/kirish" data-once>
+      <input type="hidden" name="_csrf" value="{{csrfToken}}">
+      <div class="field">
+        <label for="email">Google Email</label>
+        <input type="email" id="email" name="email" value="{{email}}" placeholder="mentor@gmail.com" required autofocus>
+      </div>
+      <button class="btn-primary btn-block btn-lg" type="submit">Mentor paneliga kirish</button>
+    </form>
+
+    <p class="muted center auth-foot">
+      Hali ro'yxatdan o'tmadingizmi? <a href="/amaliyot/mentor/royxat">Google akkaunt bilan ro'yxatdan o'tish</a>
+    </p>
+    <p class="muted center auth-foot">
+      <a href="/login">← Talaba / Ustoz kirishiga qaytish</a>
+    </p>
+  </div>
+</div>
