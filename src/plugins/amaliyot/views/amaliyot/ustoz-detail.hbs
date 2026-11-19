@@ -133,7 +133,7 @@
                 {{#if ustoz_izoh}}<div><small class="muted">{{ustoz_izoh}}</small></div>{{/if}}
               </td>
               <td data-l="Tasdiqlash" class="actions">
-                <form class="am-inline-form" method="post" action="/amaliyot/kundalik/{{id}}/ustoz-holat" data-once>
+                <form class="am-inline-form" method="post" action="/amaliyot/kundalik/{{id}}/ustoz-holat">
                   {{> csrf}}
                   <input class="am-compact-input am-w-md" type="text" name="izoh" value="{{ustoz_izoh}}" placeholder="Izoh (ixtiyoriy)">
                   <button class="btn-sm btn-green" type="submit" name="holat" value="tasdiqlandi">Tasdiqlash</button>
@@ -179,7 +179,7 @@
     </dl>
 
     <hr class="am-divider">
-    <form class="am-inline-form" method="post" action="/amaliyot/xulosa/{{xulosa.id}}/ustoz-holat" data-once>
+    <form class="am-inline-form" method="post" action="/amaliyot/xulosa/{{xulosa.id}}/ustoz-holat">
       {{> csrf}}
       <input type="number" name="baho" min="0" max="100" value="{{xulosa.ustoz_baho}}" placeholder="Baho (0-100)" class="am-w-sm">
       <input type="text" name="izoh" value="{{xulosa.ustoz_izoh}}" placeholder="Ustoz izohi" class="am-w-md">
@@ -190,3 +190,5 @@
     <p class="empty">Xulosalar kitobchasi hali shakllanmagan.</p>
   {{/if}}
 </div>
+
+<script src="/p/amaliyot/app.js"></script>

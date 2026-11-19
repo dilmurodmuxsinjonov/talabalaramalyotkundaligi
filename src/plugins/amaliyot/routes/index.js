@@ -398,7 +398,7 @@ publicRouter.post('/amaliyot/mentor/biriktirish/:id/tasdiqlash-hammasi', require
 publicRouter.post('/amaliyot/mentor/kundalik/:id/holat', requireMentor, ah(async (req, res) => {
   const id = idParam(req.params.id);
   const { holat, fikr } = parseZod(z.object({
-    holat: z.enum(['tasdiqlandi', 'qaytarildi']),
+    holat: z.enum(['tasdiqlandi', 'qaytarildi']).optional().default('tasdiqlandi'),
     fikr: z.string().trim().max(2000).optional().default(''),
   }), req.body);
   await svc.reviewKundalikByMentor({ kundalikId: id, holat, fikr }, req.mentor, req);
@@ -409,7 +409,7 @@ publicRouter.post('/amaliyot/mentor/kundalik/:id/holat', requireMentor, ah(async
 publicRouter.post('/amaliyot/mentor/xulosa/:id/holat', requireMentor, ah(async (req, res) => {
   const id = idParam(req.params.id);
   const { holat, fikr } = parseZod(z.object({
-    holat: z.enum(['tasdiqlandi', 'qaytarildi']),
+    holat: z.enum(['tasdiqlandi', 'qaytarildi']).optional().default('tasdiqlandi'),
     fikr: z.string().trim().max(2000).optional().default(''),
   }), req.body);
   await svc.reviewXulosaByMentor({ xulosaId: id, holat, fikr }, req.mentor, req);
@@ -707,7 +707,7 @@ router.post('/amaliyot/biriktirish/:id/tasdiqlash-hammasi', requireRole('teacher
 router.post('/amaliyot/kundalik/:id/ustoz-holat', requireRole('teacher', 'dekanat', 'admin'), ah(async (req, res) => {
   const id = idParam(req.params.id);
   const { holat, izoh } = parseZod(z.object({
-    holat: z.enum(['tasdiqlandi', 'qaytarildi']),
+    holat: z.enum(['tasdiqlandi', 'qaytarildi']).optional().default('tasdiqlandi'),
     izoh: z.string().trim().max(2000).optional().default(''),
   }), req.body);
   const { biriktirishId } = await svc.reviewKundalikByUstoz({ kundalikId: id, holat, izoh }, req.user, req);
@@ -718,7 +718,7 @@ router.post('/amaliyot/kundalik/:id/ustoz-holat', requireRole('teacher', 'dekana
 router.post('/amaliyot/xulosa/:id/ustoz-holat', requireRole('teacher', 'dekanat', 'admin'), ah(async (req, res) => {
   const id = idParam(req.params.id);
   const d = parseZod(z.object({
-    holat: z.enum(['tasdiqlandi', 'qaytarildi']),
+    holat: z.enum(['tasdiqlandi', 'qaytarildi']).optional().default('tasdiqlandi'),
     izoh: z.string().trim().max(2000).optional().default(''),
     baho: z.union([z.literal(''), z.coerce.number().int().min(0).max(100)]).optional(),
   }), req.body);
@@ -735,7 +735,7 @@ router.post('/amaliyot/xulosa/:id/ustoz-holat', requireRole('teacher', 'dekanat'
 router.post('/amaliyot/mentor/:id/tasdiqlash', requireRole('teacher', 'dekanat', 'admin'), ah(async (req, res) => {
   const id = idParam(req.params.id);
   const d = parseZod(z.object({
-    action: z.enum(['tasdiqlash', 'rad_etish', 'muzlatish']),
+    action: z.enum(['tasdiqlash', 'rad_etish', 'muzlatish']).optional().default('tasdiqlash'),
     muddat_kun: z.union([z.literal(''), z.coerce.number().int().min(1).max(720)]).optional(),
     muddat_birlik: z.enum(['kun', 'soat']).optional().default('kun'),
     korxona_id: z.union([z.literal(''), z.coerce.number().int().positive()]).optional(),

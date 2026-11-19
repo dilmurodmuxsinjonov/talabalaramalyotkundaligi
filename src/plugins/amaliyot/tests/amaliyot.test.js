@@ -369,3 +369,42 @@ test('Izolyatsiya va kundalik turlari: yangi tur yaratish, tahrirlash va soatlik
   });
   assert.equal(crossFac.status, 403);
 });
+
+test('Regressiya: mentor va kundalik tasdiqlash formasi action/holat yuborilmaganda ham default tasdiqlaydi', async () => {
+  const dekanId = await userId('dekan_at');
+  const mAgent = request.agent(app);
+  const regP = await mAgent.get('/amaliyot/mentor/royxat');
+  await mAgent.post('/amaliyot/mentor/royxat').type('form').send({
+    _csrf: csrfOf(regP.text),
+    email: 'regressiya.mentor@gmail.com',
+    familiya: 'Mamadjanov',
+    ism: 'Shuxrat',
+    lavozim: 'Senior dasturchi',
+    korxona_nomi: 'Robotics Lab Future',
+    ustoz_id: String(dekanId),
+  });
+
+  const { rows: [mRow] } = await pool.query("SELECT id FROM amaliyot_mentorlar WHERE email = 'regressiya.mentor@gmail.com'");
+  const dekan = await login(app, 'dekan_at');
+  const ustozPage = await dekan.get('/amaliyot/ustoz');
+  assert.equal(ustozPage.status, 200);
+  assert.doesNotMatch(ustozPage.text, new RegExp(`action="/amaliyot/mentor/${mRow.id}/tasdiqlash"[^>]*data-once`));
+
+  // action maydoni tushib qolsa ham default 'tasdiqlash' sifatida ishlaydi
+  const appRes = await dekan.form(`/amaliyot/mentor/${mRow.id}/tasdiqlash`, {
+    muddat_kun: '14',
+    muddat_birlik: 'kun',
+  });
+  assert.equal(appRes.status, 302);
+  const { rows: [mApproved] } = await pool.query('SELECT holat FROM amaliyot_mentorlar WHERE id = $1', [mRow.id]);
+  assert.equal(mApproved.holat, 'tasdiqlandi');
+
+  // Kundalik yozuvida holat tushib qolsa ham default 'tasdiqlandi' ishlaydi
+  const { rows: [b2] } = await pool.query("SELECT id FROM amaliyot_biriktirishlar WHERE student_id = $1 ORDER BY id DESC LIMIT 1", [await userId('talaba2')]);
+  const { rows: [k2] } = await pool.query('SELECT id FROM amaliyot_kundalik WHERE biriktirish_id = $1 LIMIT 1', [b2.id]);
+  const karimova = await login(app, 'karimova');
+  const kRes = await karimova.form(`/amaliyot/kundalik/${k2.id}/ustoz-holat`, { izoh: 'OK' });
+  assert.equal(kRes.status, 302);
+  const { rows: [kUpdated] } = await pool.query('SELECT ustoz_holat FROM amaliyot_kundalik WHERE id = $1', [k2.id]);
+  assert.equal(kUpdated.ustoz_holat, 'tasdiqlandi');
+});

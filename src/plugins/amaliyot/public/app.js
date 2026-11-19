@@ -1,6 +1,29 @@
-/* global document */
+/* global document, window */
 // Amaliyot kundaligi plagini mijoz tomoni yordamchilari (CSP-mos, inline skriptsiz)
 (function () {
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    var sub = e.submitter;
+    if (!f || !sub) return;
+    var msg = sub.getAttribute('data-confirm');
+    if (msg && !window.confirm(msg)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return;
+    }
+    if (sub.name) {
+      var hidden = f.querySelector('input[data-am-submitter="1"]');
+      if (!hidden) {
+        hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.setAttribute('data-am-submitter', '1');
+        f.appendChild(hidden);
+      }
+      hidden.name = sub.name;
+      hidden.value = sub.value;
+    }
+  }, true);
+
   var korxonaSelect = document.getElementById('am-korxona-select');
   var korxonaWrap = document.getElementById('am-korxona-yangi-wrap');
   if (korxonaSelect && korxonaWrap) {
