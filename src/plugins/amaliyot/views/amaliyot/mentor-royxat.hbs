@@ -1,0 +1,70 @@
+<link rel="stylesheet" href="/p/amaliyot/style.css">
+
+<div class="auth">
+  <form class="card" method="post" action="/amaliyot/mentor/royxat" data-once>
+    <div class="brand"><span class="brand-mark" aria-hidden="true">AK</span>Mentor ro'yxatdan o'tishi</div>
+    <h1 class="center auth-title">Google akkaunt bilan ro'yxatdan o'tish</h1>
+    <p class="muted center">Ariza biriktirilgan ustozga yuboriladi. Ustoz tasdiqlab bir martalik amal qilish muddatini belgilagach kira olasiz.</p>
+
+    {{#if flash}}
+      <div class="alert {{flash.type}}" role="alert">{{flash.text}}</div>
+    {{/if}}
+    {{#if googleConfigured}}
+      <a class="btn btn-blue am-google-btn" href="/amaliyot/mentor/google">Google profilini avtomatik to'ldirish</a>
+    {{/if}}
+
+    <input type="hidden" name="_csrf" value="{{csrfToken}}">
+
+    <div class="field">
+      <label for="email">Google Email</label>
+      <input type="email" id="email" name="email" value="{{draft.email}}" placeholder="ism.familiya@gmail.com" required>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="familiya">Familiya</label>
+        <input type="text" id="familiya" name="familiya" value="{{draft.familiya}}" required>
+      </div>
+      <div class="field">
+        <label for="ism">Ism</label>
+        <input type="text" id="ism" name="ism" value="{{draft.ism}}" required>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="lavozim">Korxonadagi lavozimi</label>
+        <input type="text" id="lavozim" name="lavozim" placeholder="Senior dasturchi / Bo'lim boshlig'i" required>
+      </div>
+      <div class="field">
+        <label for="telefon">Telefon</label>
+        <input type="text" id="telefon" name="telefon" placeholder="+998901234567">
+      </div>
+    </div>
+    <div class="field">
+      <label for="am-korxona-select">Korxona</label>
+      <select id="am-korxona-select" name="korxona_id">
+        <option value="">Ro'yxatda yo'q (yangi kiritaman)</option>
+        {{#each korxonalar}}
+          <option value="{{id}}">{{nomi}}</option>
+        {{/each}}
+      </select>
+    </div>
+    <div class="field" id="am-korxona-yangi-wrap">
+      <label for="korxona_nomi">Yangi korxona nomi</label>
+      <input type="text" id="korxona_nomi" name="korxona_nomi" placeholder="Korxona nomini kiriting">
+    </div>
+    <div class="field">
+      <label for="ustoz_id">Tasdiqlovchi universitet ustozi</label>
+      <select id="ustoz_id" name="ustoz_id" required>
+        <option value="">Ustozni tanlang...</option>
+        {{#each ustozlar}}
+          <option value="{{id}}">{{familiya}} {{ism}} {{ochestva}}</option>
+        {{/each}}
+      </select>
+    </div>
+
+    <button class="btn-primary btn-block btn-lg" type="submit">Ariza yuborish</button>
+    <p class="muted center auth-foot"><a href="/amaliyot/mentor/kirish">← Mentor kirish sahifasiga qaytish</a></p>
+  </form>
+</div>
+
+<script src="/p/amaliyot/app.js"></script>

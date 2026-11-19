@@ -1,0 +1,145 @@
+<link rel="stylesheet" href="/p/amaliyot/style.css">
+
+<div class="head">
+  <div>
+    <h1>Amaliyot kundaligi</h1>
+    <p class="muted mb0">Har kunlik ishlarni yozib borish, standart Word hujjatini yuklab olish va xulosalar kitobchasini to'ldirish</p>
+  </div>
+  {{#if active}}
+    <div class="actions">
+      <a class="btn btn-primary" href="/amaliyot/{{active.id}}/docx">Kundalikni yuklab olish (.docx)</a>
+      <a class="btn btn-blue" href="/amaliyot/xulosa">Xulosalar kitobchasi</a>
+      <a class="btn" href="/amaliyot/{{active.id}}/xulosa-docx">Xulosalar (.docx)</a>
+    </div>
+  {{/if}}
+</div>
+
+{{#unless active}}
+  <div class="card">
+    <h2>Amaliyot biriktirishi hali yaratilmagan</h2>
+    <p class="muted mb0">Siz hali korxonaga biriktirilmagansiz. Biriktirilgan ustozingizga yoki dekanatga murojaat qiling.</p>
+  </div>
+{{else}}
+  <div class="grid two">
+    <div class="card">
+      <h2>Biriktirilgan amaliyot ma'lumotlari</h2>
+      <dl class="kv">
+        <dt>Kundalik turi</dt><dd><b>{{active.tur_nomi}}</b></dd>
+        <dt>Korxona</dt><dd>{{active.korxona_nomi}}{{#if active.korxona_manzil}} ({{active.korxona_manzil}}){{/if}}</dd>
+        <dt>Muddat</dt><dd class="mono">{{active.boshlanish_fmt}} — {{active.tugash_fmt}}</dd>
+        <dt>Mavzu</dt><dd>{{#if active.mavzu}}{{active.mavzu}}{{else}}—{{/if}}</dd>
+        <dt>Biriktirilgan ustoz</dt><dd>{{active.ustoz_fio}}</dd>
+        <dt>Korxona mentori</dt>
+        <dd>
+          {{#if active.mentor_fio}}
+            {{active.mentor_fio}}{{#if active.mentor_lavozim}} ({{active.mentor_lavozim}}){{/if}}
+          {{else}}
+            <span class="muted">Hali biriktirilmagan</span>
+          {{/if}}
+        </dd>
+      </dl>
+
+      {{#if active.bolimlar.length}}
+        <hr class="am-divider">
+        <h3>Kundalik turi bo'yicha standart bo'limlar</h3>
+        <div class="am-sec-list">
+          {{#each active.bolimlar}}
+            <div class="am-sec-item">
+              <b>{{title}}</b>
+              {{#if value}}
+                <p class="mb0">{{value}}</p>
+              {{else}}
+                <p class="muted mb0"><small>{{hint}} — Xulosalar kitobchasida yoki yuklangan Word hujjatda to'ldiriladi</small></p>
+              {{/if}}
+            </div>
+          {{/each}}
+        </div>
+      {{/if}}
+    </div>
+
+    <div class="card">
+      <h2>Kunlik ish yozuvini qo'shish / tahrirlash</h2>
+      <form method="post" action="/amaliyot/kundalik" data-once>
+        {{> csrf}}
+        <input type="hidden" name="biriktirish_id" value="{{active.id}}">
+        <div class="row">
+          <div class="field">
+            <label for="am-sana">Sana</label>
+            <input type="date" id="am-sana" name="sana" value="{{bugun}}" min="{{active.boshlanish_sana}}" max="{{active.tugash_sana}}" required>
+          </div>
+          <div class="field">
+            <label for="am-soat">Soat</label>
+            <input type="number" id="am-soat" name="soat" step="0.5" min="0.5" max="24" value="{{active.kunlik_min_soat}}" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="am-mazmun">Bajarilgan ishlar mazmuni</label>
+          <textarea id="am-mazmun" name="ish_mazmuni" rows="4" minlength="5" required placeholder="Bugun korxonada qanday amaliy vazifalar bajarildi?"></textarea>
+        </div>
+        <div class="field">
+          <label for="am-natija">Natija / o'zlashtirilgan ko'nikma (ixtiyoriy)</label>
+          <textarea id="am-natija" name="natija" rows="2" placeholder="Olingan natija yoki o'rganilgan vosita"></textarea>
+        </div>
+        <button class="btn-primary btn-block" type="submit">Kundalik yozuvini saqlash</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="spread">
+      <h2 class="mb0">Har kunlik yozuvlar ({{kundaliklar.length}} ta)</h2>
+      {{#if xulosa}}
+        <span class="muted">Xulosalar kitobchasi: <span class="badge {{xulosa.talaba_badge.cls}}">{{xulosa.talaba_badge.label}}</span></span>
+      {{/if}}
+    </div>
+    {{#if kundaliklar.length}}
+      <div class="table-wrap mt">
+        <table class="stack">
+          <thead>
+            <tr>
+              <th>Sana</th>
+              <th>Bajarilgan ish</th>
+              <th>Soat</th>
+              <th>Natija</th>
+              <th>Ustoz</th>
+              <th>Mentor va fikr</th>
+              <th>Amal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#each kundaliklar}}
+              <tr>
+                <td data-l="Sana" class="mono">{{sana_fmt}}</td>
+                <td data-l="Ish mazmuni">{{ish_mazmuni}}</td>
+                <td data-l="Soat" class="mono">{{soat}}</td>
+                <td data-l="Natija">{{#if natija}}{{natija}}{{else}}—{{/if}}</td>
+                <td data-l="Ustoz">
+                  <span class="badge {{ustoz_badge.cls}}">{{ustoz_badge.label}}</span>
+                  {{#if ustoz_izoh}}<div><small class="muted">{{ustoz_izoh}}</small></div>{{/if}}
+                </td>
+                <td data-l="Mentor">
+                  <span class="badge {{mentor_badge.cls}}">{{mentor_badge.label}}</span>
+                  {{#if mentor_fikr}}<div><small>{{mentor_fikr}}</small></div>{{/if}}
+                </td>
+                <td data-l="Amal" class="actions">
+                  <button
+                    type="button"
+                    class="btn-sm"
+                    data-am-fill-date="{{sana}}"
+                    data-am-fill-soat="{{soat}}"
+                    data-am-fill-mazmun="{{ish_mazmuni}}"
+                    data-am-fill-natija="{{natija}}"
+                  >Tahrirlash</button>
+                </td>
+              </tr>
+            {{/each}}
+          </tbody>
+        </table>
+      </div>
+    {{else}}
+      <p class="empty mt">Hali kunlik yozuv kiritilmagan. Yuqoridagi forma orqali qo'shing yoki standart Word shablonini yuklab oling.</p>
+    {{/if}}
+  </div>
+{{/unless}}
+
+<script src="/p/amaliyot/app.js"></script>

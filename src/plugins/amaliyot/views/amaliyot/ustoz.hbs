@@ -1,0 +1,218 @@
+<link rel="stylesheet" href="/p/amaliyot/style.css">
+
+<div class="head">
+  <div>
+    <h1>Amaliyot nazorati (Ustoz)</h1>
+    <p class="muted mb0">Talabalarni korxonaga biriktirish, kundalikni tasdiqlash va korxona mentorlarini tasdiqlash</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/admin/amaliyot/turlar">Kundalik turlari</a>
+  </div>
+</div>
+
+{{#if pendingMentorsCount}}
+  <div class="alert warn" role="status">
+    Tasdiqlash kutilayotgan <b>{{pendingMentorsCount}} ta</b> korxona mentori arizasi bor. Quyidagi jadvalda bir martalik amal qilish muddatini belgilab tasdiqlang.
+  </div>
+{{/if}}
+
+<div class="grid two">
+  <div class="card">
+    <h2>Talabani korxonaga biriktirish</h2>
+    <form method="post" action="/amaliyot/biriktirish" data-once>
+      {{> csrf}}
+      <div class="field">
+        <label for="student_id">Talaba</label>
+        <select id="student_id" name="student_id" required>
+          <option value="">Tanlang...</option>
+          {{#each talabalar}}
+            <option value="{{id}}">{{familiya}} {{ism}} {{#if guruh}}({{guruh}}){{/if}}</option>
+          {{/each}}
+        </select>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="korxona_id">Korxona</label>
+          <select id="korxona_id" name="korxona_id" required>
+            <option value="">Tanlang...</option>
+            {{#each korxonalar}}
+              <option value="{{id}}">{{nomi}}</option>
+            {{/each}}
+          </select>
+        </div>
+        <div class="field">
+          <label for="mentor_id">Korxona mentori (ixtiyoriy)</label>
+          <select id="mentor_id" name="mentor_id">
+            <option value="">Hali tanlanmagan</option>
+            {{#each activeMentors}}
+              <option value="{{id}}">{{familiya}} {{ism}} — {{korxona_nomi}}</option>
+            {{/each}}
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="tur_id">Kundalik turi</label>
+        <select id="tur_id" name="tur_id" required>
+          {{#each turlar}}
+            <option value="{{id}}">{{nomi}}</option>
+          {{/each}}
+        </select>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="boshlanish_sana">Boshlanish sanasi</label>
+          <input type="date" id="boshlanish_sana" name="boshlanish_sana" value="{{bugun}}" required>
+        </div>
+        <div class="field">
+          <label for="tugash_sana">Tugash sanasi</label>
+          <input type="date" id="tugash_sana" name="tugash_sana" value="{{bugun}}" required>
+        </div>
+      </div>
+      <div class="field">
+        <label for="mavzu">Amaliyot mavzusi (ixtiyoriy)</label>
+        <input type="text" id="mavzu" name="mavzu" maxlength="300" placeholder="Masalan: Web-ilova ishlab chiqish">
+      </div>
+      <button class="btn-primary btn-block" type="submit">Talabani biriktirish</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Yangi korxona qo'shish</h2>
+    <form method="post" action="/amaliyot/korxona" data-once>
+      {{> csrf}}
+      <div class="field">
+        <label for="k_nomi">Korxona nomi</label>
+        <input type="text" id="k_nomi" name="nomi" required maxlength="200" placeholder="Masalan: UZINFOCOM MChJ">
+      </div>
+      <div class="field">
+        <label for="k_manzil">Manzil</label>
+        <input type="text" id="k_manzil" name="manzil" maxlength="300" placeholder="Toshkent sh., ...">
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="k_stir">STIR</label>
+          <input type="text" id="k_stir" name="stir" maxlength="20">
+        </div>
+        <div class="field">
+          <label for="k_tel">Telefon</label>
+          <input type="text" id="k_tel" name="telefon" maxlength="30">
+        </div>
+      </div>
+      <div class="field">
+        <label for="k_rahbar">Korxona rahbari F.I.Sh.</label>
+        <input type="text" id="k_rahbar" name="rahbar_fio" maxlength="150">
+      </div>
+      <button class="btn btn-block" type="submit">Korxonani saqlash</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Biriktirilgan talabalar ({{biriktirishlar.length}} ta)</h2>
+  {{#if biriktirishlar.length}}
+    <div class="table-wrap">
+      <table class="stack">
+        <thead>
+          <tr>
+            <th>Talaba</th>
+            <th>Korxona va mentor</th>
+            <th>Kundalik turi</th>
+            <th>Muddat</th>
+            <th>Kunlik</th>
+            <th>Xulosa</th>
+            <th>Amal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each biriktirishlar}}
+            <tr>
+              <td data-l="Talaba">
+                <b>{{student_fio}}</b>
+                {{#if guruh}}<div><small class="muted">{{guruh}}</small></div>{{/if}}
+              </td>
+              <td data-l="Korxona">
+                {{korxona_nomi}}
+                <div><small class="muted">Mentor: {{#if mentor_fio}}{{mentor_fio}}{{else}}yo'q{{/if}}</small></div>
+              </td>
+              <td data-l="Kundalik turi">{{tur_nomi}}</td>
+              <td data-l="Muddat" class="mono">{{boshlanish_fmt}} — {{tugash_fmt}}</td>
+              <td data-l="Kunlik">
+                <span class="mono">{{jami_kun}}</span> ta
+                {{#if kutilayotgan_kun}}<div><small class="muted">{{kutilayotgan_kun}} ta kutilmoqda</small></div>{{/if}}
+              </td>
+              <td data-l="Xulosa">
+                <span class="badge {{xulosa_badge.cls}}">{{xulosa_badge.label}}</span>
+                {{#if ustoz_baho}}<div><small class="mono">{{ustoz_baho}}/100</small></div>{{/if}}
+              </td>
+              <td data-l="Amal" class="actions">
+                <a class="btn btn-sm btn-primary" href="/amaliyot/ustoz/talaba/{{id}}">Tekshirish</a>
+                <a class="btn btn-sm" href="/amaliyot/{{id}}/docx">.docx</a>
+              </td>
+            </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+  {{else}}
+    <p class="empty">Hali biriktirilgan talabalar yo'q.</p>
+  {{/if}}
+</div>
+
+<div class="card">
+  <h2>Korxona mentorlari (Google ro'yxatdan o'tish va bir martalik muzlatish)</h2>
+  {{#if mentorlar.length}}
+    <div class="table-wrap">
+      <table class="stack">
+        <thead>
+          <tr>
+            <th>Mentor</th>
+            <th>Korxona va lavozim</th>
+            <th>Biriktirilgan ustoz</th>
+            <th>Holat va muddat</th>
+            <th>Boshqarish</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each mentorlar}}
+            <tr>
+              <td data-l="Mentor">
+                <b>{{familiya}} {{ism}}</b>
+                <div><small class="mono">{{email}}</small></div>
+              </td>
+              <td data-l="Korxona">
+                {{#if korxona_nomi}}{{korxona_nomi}}{{else}}—{{/if}}
+                {{#if lavozim}}<div><small class="muted">{{lavozim}}</small></div>{{/if}}
+              </td>
+              <td data-l="Ustoz">{{ustoz_fio}}</td>
+              <td data-l="Holat">
+                <span class="badge {{holat_badge.cls}}">{{holat_badge.label}}</span>
+                {{#if amal_qilish_gacha}}
+                  <div><small class="muted">Muddat: {{amal_qilish_fmt}} ({{bir_martalik_muddat_kun}} kun)</small></div>
+                {{/if}}
+              </td>
+              <td data-l="Boshqarish" class="actions">
+                {{#if is_pending}}
+                  <form class="am-inline-form" method="post" action="/amaliyot/mentor/{{id}}/tasdiqlash" data-once>
+                    {{> csrf}}
+                    <input class="am-compact-input am-w-sm" type="number" name="muddat_kun" min="1" max="365" value="14" title="Bir martalik muddat (kun)" required>
+                    <button class="btn-sm btn-green" type="submit" name="action" value="tasdiqlash">Tasdiqlash (kun)</button>
+                    <button class="btn-sm btn-red" type="submit" name="action" value="rad_etish" data-confirm="Mentorni rad etasizmi?">Rad etish</button>
+                  </form>
+                {{else if is_active}}
+                  <form class="am-inline-form" method="post" action="/amaliyot/mentor/{{id}}/tasdiqlash" data-once>
+                    {{> csrf}}
+                    <button class="btn-sm btn-red" type="submit" name="action" value="muzlatish" data-confirm="Mentor akkauntini hoziroq muzlatasizmi?">Muzlatish</button>
+                  </form>
+                {{else}}
+                  <span class="muted">Yakunlangan</span>
+                {{/if}}
+              </td>
+            </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+  {{else}}
+    <p class="empty">Hali mentor arizalari yo'q. Mentorlar <span class="mono">/amaliyot/mentor/royxat</span> orqali Google akkaunt bilan ro'yxatdan o'tadilar.</p>
+  {{/if}}
+</div>

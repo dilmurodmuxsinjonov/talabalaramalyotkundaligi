@@ -1,0 +1,71 @@
+/* Amaliyot kundaligi plagini uchun qo'shimcha stillar */
+.am-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.am-inline-form input,
+.am-inline-form select {
+  width: auto;
+  min-width: 110px;
+}
+
+.am-note {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  margin-bottom: 10px;
+}
+
+.am-sec-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.am-sec-item {
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: #fafbfd;
+}
+
+.am-google-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.am-sep {
+  text-align: center;
+  color: var(--muted);
+  font-size: .85rem;
+  margin: 12px 0;
+}
+
+.am-compact-input {
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: .88rem;
+}
+
+.am-w-sm {
+  max-width: 90px;
+}
+
+.am-w-md {
+  max-width: 180px;
+}
+
+.am-divider {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 14px 0;
+}
